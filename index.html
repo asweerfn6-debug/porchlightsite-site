@@ -486,7 +486,7 @@ function WaitlistForm({ compact }) {
   );
 }
 
-function ReferralModal({ user }) {
+function ReferralModal({ user, justSignedUp }) {
   const [visible, setVisible] = useState(false);
   const [checked, setChecked] = useState(false);
   const [shouldShow, setShouldShow] = useState(false);
@@ -497,7 +497,7 @@ function ReferralModal({ user }) {
   useEffect(() => {
     let active = true;
     async function check() {
-      if (!user || !supabaseClient) { setChecked(true); return; }
+      if (!justSignedUp || !user || !supabaseClient) { setChecked(true); return; }
       const { data } = await supabaseClient.from("referral_sources").select("id").eq("user_id", user.id).single();
       if (!active) return;
       setChecked(true);
@@ -505,7 +505,7 @@ function ReferralModal({ user }) {
     }
     check();
     return () => { active = false; };
-  }, [user]);
+  }, [user, justSignedUp]);
 
   useEffect(() => {
     if (!checked || !shouldShow) return;
@@ -2493,7 +2493,7 @@ function PricingPage({ navigate }) {
 /* ------------------------------------------------------------------ */
 /*  Page: Log in / Sign up                                             */
 /* ------------------------------------------------------------------ */
-function AuthPage({ navigate, setUser, siteMode }) {
+function AuthPage({ navigate, setUser, siteMode, onSignedUp }) {
   const [mode, setMode] = useState("login");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -2560,6 +2560,7 @@ function AuthPage({ navigate, setUser, siteMode }) {
       setMode("login");
       return;
     }
+    if (onSignedUp) onSignedUp();
     await loadProfileAndSignIn(data.user);
   };
 
@@ -2740,6 +2741,7 @@ function PorchlightApp() {
   const [homeownerStatus, setHomeownerStatus] = useState("none");
   const [user, setUser] = useState(null);
   const [chatJobId, setChatJobId] = useState(null);
+  const [justSignedUp, setJustSignedUp] = useState(false);
 
   // Founders can still see and test the full working app on the real
   // deployed link by adding ?preview=porchlight2026 to the URL — everyone
@@ -2817,7 +2819,7 @@ function PorchlightApp() {
   else if (current === "browse-jobs") Page = <BrowseJobsPage navigate={navigate} user={user} />;
   else if (current === "safety") Page = <SafetyPage navigate={navigate} />;
   else if (current === "rate-job") Page = <RateJobPage navigate={navigate} user={user} openChat={openChat} />;
-  else if (current === "login") Page = <AuthPage navigate={navigate} setUser={setUser} siteMode={siteMode} />;
+  else if (current === "login") Page = <AuthPage navigate={navigate} setUser={setUser} siteMode={siteMode} onSignedUp={() => setJustSignedUp(true)} />;
   else if (current === "pricing") Page = <PricingPage navigate={navigate} />;
   else if (current === "profile") Page = <ProfilePage navigate={navigate} user={user} setUser={setUser} openChat={openChat} />;
   else if (current === "messages") Page = <MessagesPage navigate={navigate} user={user} jobId={chatJobId} openChat={openChat} />;
@@ -2829,7 +2831,7 @@ function PorchlightApp() {
       <SiteHeader current={current} navigate={navigate} goBack={goBack} goHome={goHome} canGoBack={stack.length > 1} user={user} onLogout={handleLogout} siteMode={siteMode} onOpenMessages={openMessagesInbox} />
       <main>{Page}</main>
       <SiteFooter navigate={navigate} siteMode={siteMode} user={user} />
-      <ReferralModal user={user} />
+      <ReferralModal user={user} justSignedUp={justSignedUp} />
     </div>
   );
 }
