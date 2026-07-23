@@ -1750,30 +1750,34 @@ function RateJobPage({ navigate, user, openChat }) {
   const loadData = async () => {
     if (!supabaseClient || !user) { setLoading(false); return; }
     setLoading(true);
+    setError("");
 
-    const { data: jobsData } = await supabaseClient
+    const { data: jobsData, error: jobsErr } = await supabaseClient
       .from("jobs")
       .select("id, title, job_date, status, job_applications(id, teen_id, status, profiles(full_name))")
       .eq("homeowner_id", user.id)
       .eq("status", "open");
+    if (jobsErr) { setError("Couldn't load open jobs: " + jobsErr.message); setLoading(false); return; }
     const pending = (jobsData || [])
       .map((j) => ({ ...j, applicants: (j.job_applications || []).filter((a) => a.status === "pending") }))
       .filter((j) => j.applicants.length > 0);
     setOpenJobs(pending);
 
-    const { data: assigned } = await supabaseClient
+    const { data: assigned, error: assignedErr } = await supabaseClient
       .from("jobs")
       .select("id, title, job_date, assigned_teen_id")
       .eq("homeowner_id", user.id)
       .eq("status", "assigned");
+    if (assignedErr) { setError("Couldn't load assigned jobs: " + assignedErr.message); setLoading(false); return; }
     setAssignedJobs(assigned || []);
 
-    const { data: done } = await supabaseClient
+    const { data: done, error: doneErr } = await supabaseClient
       .from("jobs")
       .select("id, title, job_date, assigned_teen_id, ratings(stars, note)")
       .eq("homeowner_id", user.id)
       .eq("status", "completed")
       .order("job_date", { ascending: false });
+    if (doneErr) { setError("Couldn't load completed jobs: " + doneErr.message); setLoading(false); return; }
     setCompletedJobs(done || []);
 
     const teenIds = [...new Set([...(assigned || []).map((j) => j.assigned_teen_id), ...(done || []).map((j) => j.assigned_teen_id)].filter(Boolean))];
@@ -1795,6 +1799,7 @@ function RateJobPage({ navigate, user, openChat }) {
     const { error: jobErr } = await supabaseClient.from("jobs").update({ status: "assigned", assigned_teen_id: applicant.teen_id }).eq("id", job.id);
     setSaving(false);
     if (jobErr) { setError(jobErr.message); return; }
+    if (openChat) { openChat(job.id); return; }
     setSuccess(`Accepted ${applicant.profiles?.full_name || "the applicant"} for "${job.title}" — they can now see the exact address for this job.`);
     loadData();
   };
@@ -1861,6 +1866,7 @@ function RateJobPage({ navigate, user, openChat }) {
         <p className="pl-lede" style={{ marginBottom: 28 }}>Pick an applicant to mark a job done and leave a rating — this closes the listing and counts toward their badge tier.</p>
 
         {success && <div className="pl-confirm" style={{ marginBottom: 20 }}><IconCheck /> {success}</div>}
+        {error && <div className="pl-age-note" style={{ marginBottom: 20 }}><IconAlert /><span>{error}</span></div>}
         {loading && <p style={{ color: "var(--ink-soft)" }}>Loading your jobs…</p>}
 
         {ratingTarget ? (
@@ -1875,7 +1881,6 @@ function RateJobPage({ navigate, user, openChat }) {
               <label htmlFor="rate-note">Optional note for the teen</label>
               <textarea className="pl-textarea" id="rate-note" placeholder="e.g. Showed up on time, did great work" value={note} onChange={(e) => setNote(e.target.value)} disabled={saving} />
             </div>
-            {error && <div className="pl-age-note"><IconAlert /><span>{error}</span></div>}
             <div style={{ display: "flex", gap: 12 }}>
               <button className="pl-btn pl-btn-amber" onClick={submitRating} disabled={saving}>{saving ? "Saving…" : "Submit rating"}</button>
               <button className="pl-btn pl-btn-outline" onClick={() => setRatingTarget(null)} disabled={saving}>Cancel</button>
