@@ -276,6 +276,20 @@ const GlobalStyle = () => (
       .pl-price-card h3{font-size:16.5px;margin-bottom:2px;}
       .pl-price-card p{color:var(--ink-soft);font-size:13.5px;margin:10px 0 0;}
       .pl-price-tag{display:inline-block;font-size:11px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;background:var(--dusk-deep);color:#fff;padding:4px 10px;border-radius:999px;margin-bottom:10px;}
+
+      /* referral source popup */
+      .pl-modal-overlay{position:fixed;inset:0;background:rgba(27,36,48,0.55);backdrop-filter:blur(2px);display:flex;align-items:center;justify-content:center;z-index:9999;padding:20px;opacity:0;transition:opacity .45s ease;}
+      .pl-modal-overlay.pl-modal-visible{opacity:1;}
+      .pl-modal-card{background:var(--white);border-radius:24px;max-width:480px;width:100%;padding:32px;box-shadow:0 30px 60px -20px rgba(27,36,48,0.4);transform:scale(0.92) translateY(14px);opacity:0;transition:transform .5s cubic-bezier(.2,.8,.2,1),opacity .5s ease;position:relative;overflow:hidden;}
+      .pl-modal-overlay.pl-modal-visible .pl-modal-card{transform:scale(1) translateY(0);opacity:1;}
+      .pl-modal-card::before{content:"";position:absolute;top:-60px;right:-60px;width:180px;height:180px;border-radius:50%;background:radial-gradient(circle,rgba(242,169,59,0.35),transparent 70%);}
+      .pl-modal-card::after{content:"";position:absolute;bottom:-70px;left:-40px;width:180px;height:180px;border-radius:50%;background:radial-gradient(circle,rgba(46,92,138,0.25),transparent 70%);}
+      .pl-modal-close{position:absolute;top:16px;right:16px;background:none;border:none;font-size:20px;color:var(--ink-soft);cursor:pointer;line-height:1;padding:4px;z-index:2;}
+      .pl-modal-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:20px;position:relative;z-index:1;}
+      .pl-modal-option{display:flex;align-items:center;gap:8px;border:2px solid var(--line);border-radius:14px;padding:12px 14px;background:var(--white);font-weight:700;font-size:14px;cursor:pointer;transition:all .15s ease;text-align:left;}
+      .pl-modal-option:hover{border-color:var(--amber-deep);background:#FFF6E4;transform:translateY(-1px);}
+      .pl-modal-option:disabled{opacity:.5;cursor:default;transform:none;}
+      .pl-modal-emoji{font-size:20px;}
     `}</style>
   </>
 );
@@ -407,9 +421,21 @@ function ModeBanner({ mode }) {
   );
 }
 
+const REFERRAL_OPTIONS = [
+  { key: "tiktok", label: "TikTok", emoji: "🎵" },
+  { key: "instagram", label: "Instagram", emoji: "📸" },
+  { key: "facebook", label: "Facebook", emoji: "👍" },
+  { key: "friend", label: "A friend or family member", emoji: "🗣️" },
+  { key: "google", label: "Google search", emoji: "🔍" },
+  { key: "flyer", label: "Local flyer or sign", emoji: "📍" },
+  { key: "school", label: "School", emoji: "🎒" },
+  { key: "other", label: "Something else", emoji: "✨" },
+];
+
 function WaitlistForm({ compact }) {
   const [email, setEmail] = useState("");
   const [role, setRole] = useState("homeowner");
+  const [heardFrom, setHeardFrom] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -419,7 +445,7 @@ function WaitlistForm({ compact }) {
     if (!email.trim() || !email.includes("@")) { setError("Enter a valid email."); return; }
     if (!supabaseClient) { setError("Can't reach the database right now — try again shortly."); return; }
     setError(""); setSaving(true);
-    const { error: insertErr } = await supabaseClient.from("waitlist_signups").insert({ email: email.trim().toLowerCase(), interest: role });
+    const { error: insertErr } = await supabaseClient.from("waitlist_signups").insert({ email: email.trim().toLowerCase(), interest: role, heard_from: heardFrom || null });
     setSaving(false);
     if (insertErr) {
       setError(insertErr.message.toLowerCase().includes("duplicate") ? "That email's already on the list — we'll be in touch." : insertErr.message);
@@ -447,9 +473,95 @@ function WaitlistForm({ compact }) {
           <option value="teen">Teen worker</option>
         </select>
       </div>
+      <div className="pl-field" style={{ flex: "0 0 auto", marginBottom: 0 }}>
+        <label htmlFor="waitlist-heard">Heard from (optional)</label>
+        <select className="pl-select" id="waitlist-heard" value={heardFrom} onChange={(e) => setHeardFrom(e.target.value)}>
+          <option value="">Select one</option>
+          {REFERRAL_OPTIONS.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
+        </select>
+      </div>
       <button type="submit" className="pl-btn pl-btn-amber" disabled={saving} style={{ height: 46 }}>{saving ? "Joining…" : "Join the waitlist"}</button>
       {error && <div className="pl-age-note" style={{ flexBasis: "100%" }}><IconAlert /><span>{error}</span></div>}
     </form>
+  );
+}
+
+function ReferralModal({ user }) {
+  const [visible, setVisible] = useState(false);
+  const [checked, setChecked] = useState(false);
+  const [shouldShow, setShouldShow] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [otherText, setOtherText] = useState("");
+  const [showOtherInput, setShowOtherInput] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    async function check() {
+      if (!user || !supabaseClient) { setChecked(true); return; }
+      const { data } = await supabaseClient.from("referral_sources").select("id").eq("user_id", user.id).single();
+      if (!active) return;
+      setChecked(true);
+      if (!data) setShouldShow(true);
+    }
+    check();
+    return () => { active = false; };
+  }, [user]);
+
+  useEffect(() => {
+    if (!checked || !shouldShow) return;
+    const t = setTimeout(() => setVisible(true), 1400); // "slowly pops up"
+    return () => clearTimeout(t);
+  }, [checked, shouldShow]);
+
+  const dismiss = async (source, detail) => {
+    setVisible(false);
+    setTimeout(() => setShouldShow(false), 400);
+    if (!supabaseClient || !user) return;
+    await supabaseClient.from("referral_sources").insert({ user_id: user.id, source, detail: detail || null });
+  };
+
+  const pick = async (opt) => {
+    if (opt.key === "other") { setShowOtherInput(true); return; }
+    setSaving(true);
+    await dismiss(opt.key, null);
+    setSaving(false);
+  };
+
+  const submitOther = async () => {
+    setSaving(true);
+    await dismiss("other", otherText.trim() || null);
+    setSaving(false);
+  };
+
+  if (!checked || !shouldShow) return null;
+
+  return (
+    <div className={"pl-modal-overlay" + (visible ? " pl-modal-visible" : "")}>
+      <div className="pl-modal-card">
+        <button className="pl-modal-close" onClick={() => dismiss("skipped", null)} aria-label="Close">✕</button>
+        <div className="pl-eyebrow"><Beacon /> Quick question</div>
+        <h2 style={{ fontSize: 24, marginBottom: 6 }}>How'd you hear about Porchlight? 🎉</h2>
+        <p style={{ color: "var(--ink-soft)", fontSize: 14.5, margin: 0 }}>Takes two seconds, and it genuinely helps us know where to focus.</p>
+
+        {!showOtherInput ? (
+          <div className="pl-modal-grid">
+            {REFERRAL_OPTIONS.map((o) => (
+              <button key={o.key} className="pl-modal-option" onClick={() => pick(o)} disabled={saving}>
+                <span className="pl-modal-emoji">{o.emoji}</span> {o.label}
+              </button>
+            ))}
+          </div>
+        ) : (
+          <div style={{ marginTop: 20, position: "relative", zIndex: 1 }}>
+            <div className="pl-field">
+              <label htmlFor="referral-other">Tell us where!</label>
+              <input className="pl-input" id="referral-other" value={otherText} onChange={(e) => setOtherText(e.target.value)} placeholder="e.g. a local Facebook group" />
+            </div>
+            <button className="pl-btn pl-btn-amber" onClick={submitOther} disabled={saving} style={{ width: "100%" }}>{saving ? "Saving…" : "Submit"}</button>
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -2717,6 +2829,7 @@ function PorchlightApp() {
       <SiteHeader current={current} navigate={navigate} goBack={goBack} goHome={goHome} canGoBack={stack.length > 1} user={user} onLogout={handleLogout} siteMode={siteMode} onOpenMessages={openMessagesInbox} />
       <main>{Page}</main>
       <SiteFooter navigate={navigate} siteMode={siteMode} user={user} />
+      <ReferralModal user={user} />
     </div>
   );
 }
