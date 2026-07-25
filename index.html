@@ -1902,9 +1902,35 @@ function RateJobPage({ navigate, user, openChat }) {
       .eq("homeowner_id", user.id)
       .eq("status", "open");
     if (jobsErr) { setError("Couldn't load open jobs: " + jobsErr.message); setLoading(false); return; }
-    const pending = (jobsData || [])
+    let pending = (jobsData || [])
       .map((j) => ({ ...j, applicants: (j.job_applications || []).filter((a) => a.status === "pending") }))
       .filter((j) => j.applicants.length > 0);
+
+    // Enrich each applicant with their real rating stats (badge tier + average stars),
+    // so the homeowner can compare applicants when more than one applies.
+    const applicantTeenIds = [...new Set(pending.flatMap((j) => j.applicants.map((a) => a.teen_id)))];
+    if (applicantTeenIds.length) {
+      const { data: allRatings } = await supabaseClient.from("ratings").select("teen_id, stars").in("teen_id", applicantTeenIds);
+      const statsByTeen = {};
+      (allRatings || []).forEach((r) => {
+        if (!statsByTeen[r.teen_id]) statsByTeen[r.teen_id] = { total: 0, sum: 0, fiveStars: 0 };
+        statsByTeen[r.teen_id].total += 1;
+        statsByTeen[r.teen_id].sum += r.stars;
+        if (r.stars === 5) statsByTeen[r.teen_id].fiveStars += 1;
+      });
+      pending = pending.map((j) => ({
+        ...j,
+        applicants: j.applicants.map((a) => {
+          const s = statsByTeen[a.teen_id] || { total: 0, sum: 0, fiveStars: 0 };
+          return {
+            ...a,
+            ratingCount: s.total,
+            avgStars: s.total ? (s.sum / s.total) : null,
+            tier: getBadgeTier(s.fiveStars),
+          };
+        }),
+      }));
+    }
     setOpenJobs(pending);
 
     const { data: assigned, error: assignedErr } = await supabaseClient
@@ -2037,11 +2063,22 @@ function RateJobPage({ navigate, user, openChat }) {
               {openJobs.length === 0 && <p style={{ color: "var(--ink-soft)", marginBottom: 24 }}>No pending applicants right now.</p>}
               {openJobs.map((job) => (
                 <div className="pl-form-card" key={job.id} style={{ marginBottom: 16 }}>
-                  <h3 style={{ marginBottom: 8 }}>{job.title}</h3>
+                  <h3 style={{ marginBottom: 12 }}>{job.title}</h3>
                   {job.applicants.map((a) => (
-                    <div key={a.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                      <span>{a.profiles?.full_name || "Applicant"}</span>
-                      <button className="pl-btn pl-btn-amber pl-btn-sm" onClick={() => acceptApplicant(job, a)} disabled={saving}>Accept applicant</button>
+                    <div key={a.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, gap: 12, flexWrap: "wrap", paddingBottom: 12, borderBottom: "1px solid var(--line)" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        {a.tier ? <BadgeIcon tier={a.tier} size={32} /> : null}
+                        <div>
+                          <div style={{ fontWeight: 700 }}>{a.profiles?.full_name || "Applicant"}</div>
+                          <div style={{ fontSize: 13, color: "var(--ink-soft)" }}>
+                            {a.tier ? `${a.tier.name} tier` : "No badge yet"}
+                            {a.ratingCount > 0
+                              ? ` · ${a.avgStars.toFixed(1)}★ avg (${a.ratingCount} rating${a.ratingCount === 1 ? "" : "s"})`
+                              : " · no ratings yet"}
+                          </div>
+                        </div>
+                      </div>
+                      <button className="pl-btn pl-btn-amber pl-btn-sm" onClick={() => acceptApplicant(job, a)} disabled={saving}>Accept</button>
                     </div>
                   ))}
                 </div>
