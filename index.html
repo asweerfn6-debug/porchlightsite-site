@@ -675,6 +675,7 @@ function TrustStrip() {
 
 function PilotBanner() {
   const [email, setEmail] = useState("");
+  const [town, setTown] = useState("");
   const [sent, setSent] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -684,7 +685,7 @@ function PilotBanner() {
     if (!email.trim() || !email.includes("@")) { setError("Enter a valid email."); return; }
     if (!supabaseClient) { setError("Can't reach the database right now — try again shortly."); return; }
     setError(""); setSaving(true);
-    const { error: insertErr } = await supabaseClient.from("waitlist_signups").insert({ email: email.trim().toLowerCase() });
+    const { error: insertErr } = await supabaseClient.from("waitlist_signups").insert({ email: email.trim().toLowerCase(), desired_town: town.trim() || null });
     setSaving(false);
     if (insertErr) {
       setError(insertErr.message.toLowerCase().includes("duplicate") ? "That email's already on the list — we'll be in touch." : insertErr.message);
@@ -702,9 +703,13 @@ function PilotBanner() {
             <p>Join the waitlist and we'll let you know the moment Porchlight opens near you, along with early access for founding families.</p>
             {error && <p style={{ color: "#FFD98C", fontSize: 13.5, marginTop: 8 }}>{error}</p>}
           </div>
-          <form className="pl-pilot-form" onSubmit={submit}>
+          <form className="pl-pilot-form" onSubmit={submit} style={{ flexDirection: "column", alignItems: "stretch", width: "100%", maxWidth: 360 }}>
             <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" aria-label="Email address" required disabled={sent} />
-            <button type="submit" className="pl-btn pl-btn-amber" disabled={saving || sent}>{sent ? "You're on the list ✓" : saving ? "Joining…" : "Notify me"}</button>
+            <label htmlFor="pilot-town" style={{ color: "#CBD9E8", fontSize: 13.5, marginTop: 12, marginBottom: 6, display: "block" }}>
+              What town do you want to see Porchlight in next?
+            </label>
+            <input id="pilot-town" type="text" value={town} onChange={(e) => setTown(e.target.value)} placeholder="e.g. Westport, CT" aria-label="Desired town" disabled={sent} />
+            <button type="submit" className="pl-btn pl-btn-amber" style={{ marginTop: 14 }} disabled={saving || sent}>{sent ? "You're on the list ✓" : saving ? "Joining…" : "Notify me"}</button>
           </form>
         </div>
       </div>
