@@ -1740,7 +1740,8 @@ function BrowseJobsPage({ navigate, user }) {
   const applyToJob = async (job) => {
     setApplyError("");
     if (!user) { setApplyError("Log in as a teen worker to apply for jobs."); return; }
-    if (user.role === "teen" && !hasConsent) { setApplyError("A parent needs to complete the consent form with you before you can apply."); return; }
+    if (user.role !== "teen") { setApplyError("Only teen worker accounts can apply to jobs — you're logged in as a homeowner."); return; }
+    if (!hasConsent) { setApplyError("A parent needs to complete the consent form with you before you can apply."); return; }
     if (!supabaseClient) return;
     const { error } = await supabaseClient.from("job_applications").insert({ job_id: job.id, teen_id: user.id });
     if (error) {
@@ -1790,6 +1791,13 @@ function BrowseJobsPage({ navigate, user }) {
           </div>
         )}
 
+        {user?.role === "homeowner" && (
+          <div className="pl-age-note" style={{ marginBottom: 16 }}>
+            <IconAlert />
+            <span>You're browsing as a homeowner — homeowner accounts can't apply to jobs. This view is for teen workers.</span>
+          </div>
+        )}
+
         {applied && (
           <div className="pl-confirm"><IconCheck /> Applied to "{applied}" — the homeowner will be notified to review it.</div>
         )}
@@ -1821,10 +1829,10 @@ function BrowseJobsPage({ navigate, user }) {
                 <span style={{ fontSize: 13, color: "var(--ink-soft)" }}>{j.job_date}</span>
                 <button
                   className="pl-btn pl-btn-amber pl-btn-sm"
-                  disabled={appliedIds.includes(j.id) || (user?.role === "teen" && hasConsent === false)}
+                  disabled={appliedIds.includes(j.id) || user?.role === "homeowner" || (user?.role === "teen" && hasConsent === false)}
                   onClick={() => applyToJob(j)}
                 >
-                  {appliedIds.includes(j.id) ? "Applied" : "Apply"}
+                  {appliedIds.includes(j.id) ? "Applied" : user?.role === "homeowner" ? "Teens only" : "Apply"}
                 </button>
               </div>
             </div>
@@ -2097,6 +2105,7 @@ function MessagesPage({ navigate, user, jobId, openChat }) {
   const [sending, setSending] = useState(false);
   const [inbox, setInbox] = useState([]);
   const [inboxLoading, setInboxLoading] = useState(true);
+  const [inboxError, setInboxError] = useState("");
   const scrollRef = useRef(null);
 
   useEffect(() => {
@@ -2104,12 +2113,14 @@ function MessagesPage({ navigate, user, jobId, openChat }) {
     async function loadInbox() {
       if (jobId || !user || !supabaseClient) { setInboxLoading(false); return; }
       setInboxLoading(true);
+      setInboxError("");
       if (user.role === "homeowner") {
-        const { data } = await supabaseClient
+        const { data, error: qErr } = await supabaseClient
           .from("jobs")
           .select("id, title, status, assigned_teen_id")
           .eq("homeowner_id", user.id)
           .in("status", ["assigned", "completed"]);
+        if (qErr) { if (active) { setInboxError(qErr.message); setInboxLoading(false); } return; }
         const jobs = data || [];
         const teenIds = [...new Set(jobs.map((j) => j.assigned_teen_id).filter(Boolean))];
         let names = {};
@@ -2119,11 +2130,12 @@ function MessagesPage({ navigate, user, jobId, openChat }) {
         }
         if (active) setInbox(jobs.map((j) => ({ id: j.id, title: j.title, otherName: names[j.assigned_teen_id] || "Teen" })));
       } else {
-        const { data } = await supabaseClient
+        const { data, error: qErr } = await supabaseClient
           .from("job_applications")
           .select("jobs(id, title, homeowner_id)")
           .eq("teen_id", user.id)
           .eq("status", "accepted");
+        if (qErr) { if (active) { setInboxError(qErr.message); setInboxLoading(false); } return; }
         const jobs = (data || []).map((a) => a.jobs).filter(Boolean);
         const homeownerIds = [...new Set(jobs.map((j) => j.homeowner_id).filter(Boolean))];
         let names = {};
@@ -2221,6 +2233,7 @@ function MessagesPage({ navigate, user, jobId, openChat }) {
           <div className="pl-eyebrow"><Beacon /> Messages</div>
           <h1 style={{ fontSize: "clamp(26px,3.2vw,34px)", marginBottom: 16 }}>Your conversations.</h1>
 
+          {inboxError && <div className="pl-age-note" style={{ marginBottom: 16 }}><IconAlert /><span>{inboxError}</span></div>}
           {inboxLoading && <p style={{ color: "var(--ink-soft)" }}>Loading…</p>}
 
           {!inboxLoading && inbox.length === 0 && (
@@ -2329,7 +2342,19 @@ function ProfilePage({ navigate, user, setUser, openChat }) {
           .select("id, title, category, status, pay_amount, job_date")
           .eq("homeowner_id", user.id)
           .order("job_date", { ascending: false });
-        if (active) setListings(data || []);
+        const jobs = data || [];
+
+        const openJobIds = jobs.filter((j) => j.status === "open").map((j) => j.id);
+        let counts = {};
+        if (openJobIds.length) {
+          const { data: apps } = await supabaseClient
+            .from("job_applications")
+            .select("job_id")
+            .in("job_id", openJobIds)
+            .eq("status", "pending");
+          (apps || []).forEach((a) => { counts[a.job_id] = (counts[a.job_id] || 0) + 1; });
+        }
+        if (active) setListings(jobs.map((j) => ({ ...j, pendingCount: counts[j.id] || 0 })));
       } else if (user.role === "teen") {
         const { data } = await supabaseClient
           .from("job_applications")
@@ -2425,19 +2450,47 @@ function ProfilePage({ navigate, user, setUser, openChat }) {
         <h2 style={{ fontSize: 18, margin: "8px 0 12px" }}>{user.role === "homeowner" ? "Your posted jobs" : "Your applications"}</h2>
         {loading && <p style={{ color: "var(--ink-soft)" }}>Loading…</p>}
 
+        {user.role === "homeowner" && !loading && listings.some((j) => j.pendingCount > 0) && (
+          <div className="pl-confirm" style={{ marginBottom: 16 }}>
+            <IconAlert /> You have {listings.reduce((sum, j) => sum + (j.pendingCount || 0), 0)} applicant{listings.reduce((sum, j) => sum + (j.pendingCount || 0), 0) === 1 ? "" : "s"} waiting for review across {listings.filter((j) => j.pendingCount > 0).length} job{listings.filter((j) => j.pendingCount > 0).length === 1 ? "" : "s"}.
+          </div>
+        )}
+
         {user.role === "homeowner" && !loading && (
           listings.length === 0 ? (
             <p style={{ color: "var(--ink-soft)" }}>You haven't posted any jobs yet.</p>
           ) : (
             listings.map((j) => (
-              <div className="pl-form-card" key={j.id} style={{ marginBottom: 12 }}>
+              <div
+                className="pl-form-card"
+                key={j.id}
+                style={{
+                  marginBottom: 12,
+                  borderColor: j.pendingCount > 0 ? "var(--amber-deep)" : undefined,
+                  borderWidth: j.pendingCount > 0 ? 2 : undefined,
+                }}
+              >
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
                   <div>
                     <h3 style={{ marginBottom: 4 }}>{j.title}</h3>
                     <p style={{ color: "var(--ink-soft)", fontSize: 14, margin: 0 }}>{j.category} · ${j.pay_amount} · {j.job_date}</p>
                   </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
                     <span className="pl-job-cat">{j.status}</span>
+                    {j.status === "open" && j.pendingCount > 0 && (
+                      <span
+                        style={{
+                          background: "var(--amber)",
+                          color: "#3a2705",
+                          fontWeight: 800,
+                          fontSize: 12.5,
+                          padding: "4px 10px",
+                          borderRadius: 999,
+                        }}
+                      >
+                        {j.pendingCount} applicant{j.pendingCount === 1 ? "" : "s"} waiting
+                      </span>
+                    )}
                     {(j.status === "open" || j.status === "assigned") && (
                       <button className="pl-btn pl-btn-outline pl-btn-sm" onClick={() => navigate("rate-job")}>
                         {j.status === "open" ? "View applicants" : "Manage"}
