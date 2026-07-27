@@ -356,6 +356,9 @@ const BADGE_TIERS = [
 function getBadgeTier(fiveStarCount) {
   return BADGE_TIERS.find((t) => fiveStarCount >= t.min && fiveStarCount <= t.max) || null;
 }
+function formatPay(amount, payType) {
+  return payType === "hourly" ? `$${amount}/hr` : `$${amount}`;
+}
 function BadgeIcon({ tier, size = 40 }) {
   if (!tier) return null;
   return (
@@ -1364,6 +1367,7 @@ function PostJobPage({ navigate, homeownerStatus, user }) {
   const [title, setTitle] = useState("");
   const [category, setCategory] = useState("");
   const [pay, setPay] = useState("");
+  const [payType, setPayType] = useState("flat");
   const [date, setDate] = useState("");
   const [startTime, setStartTime] = useState("");
   const [endTime, setEndTime] = useState("");
@@ -1426,6 +1430,7 @@ function PostJobPage({ navigate, homeownerStatus, user }) {
       category,
       description: desc.trim(),
       pay_amount: payNum,
+      pay_type: payType,
       job_date: date,
       start_time: startTime,
       end_time: endTime,
@@ -1518,8 +1523,15 @@ function PostJobPage({ navigate, homeownerStatus, user }) {
                   </select>
                 </div>
                 <div className="pl-field">
-                  <label htmlFor="job-pay">Pay offered ($)</label>
-                  <input className="pl-input" id="job-pay" value={pay} onChange={(e) => setPay(e.target.value)} placeholder="e.g. 25" required />
+                  <label htmlFor="job-pay-type">Pay type</label>
+                  <select className="pl-select" id="job-pay-type" value={payType} onChange={(e) => setPayType(e.target.value)}>
+                    <option value="flat">Flat fee (whole job)</option>
+                    <option value="hourly">Per hour</option>
+                  </select>
+                </div>
+                <div className="pl-field">
+                  <label htmlFor="job-pay">{payType === "hourly" ? "Pay per hour ($)" : "Pay offered ($)"}</label>
+                  <input className="pl-input" id="job-pay" value={pay} onChange={(e) => setPay(e.target.value)} placeholder={payType === "hourly" ? "e.g. 20" : "e.g. 25"} required />
                 </div>
               </div>
               <div className="pl-form-grid">
@@ -1851,7 +1863,7 @@ function JobMap({ jobs, onViewJob }) {
 
       map.on("click", "unclustered-point", (e) => {
         const feature = e.features[0];
-        const { id, title, category, public_area_label, pay_amount, job_date } = feature.properties;
+        const { id, title, category, public_area_label, pay_amount, pay_type, job_date } = feature.properties;
         const coords = feature.geometry.coordinates.slice();
         if (popupRef.current) popupRef.current.remove();
         const node = document.createElement("div");
@@ -1861,7 +1873,7 @@ function JobMap({ jobs, onViewJob }) {
           '<div style="font-size:12px;color:#5B6472;text-transform:uppercase;letter-spacing:.03em;margin-bottom:4px;">' + category + '</div>' +
           '<div style="font-weight:700;margin-bottom:4px;">' + title + '</div>' +
           '<div style="font-size:13px;color:#5B6472;margin-bottom:2px;">' + public_area_label + '</div>' +
-          '<div style="font-size:13px;color:#5B6472;margin-bottom:10px;">$' + pay_amount + ' \u00b7 ' + job_date + '</div>' +
+          '<div style="font-size:13px;color:#5B6472;margin-bottom:10px;">$' + pay_amount + (pay_type === 'hourly' ? '/hr' : '') + ' \u00b7 ' + job_date + '</div>' +
           '<button id="view-job-' + id + '" style="background:#F2A93B;border:none;padding:8px 14px;border-radius:8px;font-weight:700;cursor:pointer;width:100%;">View Job</button>';
         popupRef.current = new window.mapboxgl.Popup({ offset: 12 }).setLngLat(coords).setDOMContent(node).addTo(map);
         setTimeout(() => {
@@ -1891,7 +1903,7 @@ function JobMap({ jobs, onViewJob }) {
       .map((j) => ({
         type: "Feature",
         geometry: { type: "Point", coordinates: [j.public_lng, j.public_lat] },
-        properties: { id: j.id, title: j.title, category: j.category, public_area_label: j.public_area_label || "", pay_amount: j.pay_amount, job_date: j.job_date },
+        properties: { id: j.id, title: j.title, category: j.category, public_area_label: j.public_area_label || "", pay_amount: j.pay_amount, pay_type: j.pay_type || "flat", job_date: j.job_date },
       }));
     source.setData({ type: "FeatureCollection", features });
     if (features.length) {
@@ -1935,7 +1947,7 @@ function BrowseJobsPage({ navigate, user }) {
       if (!supabaseClient) { setLoading(false); return; }
       const { data, error } = await supabaseClient
         .from("jobs")
-        .select("id, title, category, description, pay_amount, job_date, start_time, end_time, status, public_lat, public_lng, public_area_label")
+        .select("id, title, category, description, pay_amount, pay_type, job_date, start_time, end_time, status, public_lat, public_lng, public_area_label")
         .eq("status", "open")
         .order("created_at", { ascending: false });
       if (active) {
@@ -2051,7 +2063,7 @@ function BrowseJobsPage({ navigate, user }) {
             <div className="pl-job-card" id={"job-card-" + j.id} key={j.id}>
               <div className="pl-job-top">
                 <span className="pl-job-cat">{j.category}</span>
-                <span className="pl-job-pay">${j.pay_amount}</span>
+                <span className="pl-job-pay">{formatPay(j.pay_amount, j.pay_type)}</span>
               </div>
               <h3>{j.title}</h3>
               <div className="pl-job-meta">
@@ -2651,7 +2663,7 @@ function ProfilePage({ navigate, user, setUser, openChat, openTeenProfile }) {
       if (user.role === "homeowner") {
         const { data } = await supabaseClient
           .from("jobs")
-          .select("id, title, category, status, pay_amount, job_date")
+          .select("id, title, category, status, pay_amount, pay_type, job_date")
           .eq("homeowner_id", user.id)
           .order("job_date", { ascending: false });
         const jobs = data || [];
@@ -2670,7 +2682,7 @@ function ProfilePage({ navigate, user, setUser, openChat, openTeenProfile }) {
       } else if (user.role === "teen") {
         const { data } = await supabaseClient
           .from("job_applications")
-          .select("id, status, jobs(id, title, category, pay_amount, job_date, status, teen_marked_done)")
+          .select("id, status, jobs(id, title, category, pay_amount, pay_type, job_date, status, teen_marked_done)")
           .eq("teen_id", user.id);
         if (active) setListings(data || []);
 
@@ -2795,7 +2807,7 @@ function ProfilePage({ navigate, user, setUser, openChat, openTeenProfile }) {
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
                   <div>
                     <h3 style={{ marginBottom: 4 }}>{j.title}</h3>
-                    <p style={{ color: "var(--ink-soft)", fontSize: 14, margin: 0 }}>{j.category} · ${j.pay_amount} · {j.job_date}</p>
+                    <p style={{ color: "var(--ink-soft)", fontSize: 14, margin: 0 }}>{j.category} · {formatPay(j.pay_amount, j.pay_type)} · {j.job_date}</p>
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
                     <span className="pl-job-cat">{j.status}</span>
@@ -2834,7 +2846,7 @@ function ProfilePage({ navigate, user, setUser, openChat, openTeenProfile }) {
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
                   <div>
                     <h3 style={{ marginBottom: 4 }}>{a.jobs?.title}</h3>
-                    <p style={{ color: "var(--ink-soft)", fontSize: 14, margin: 0 }}>{a.jobs?.category} · ${a.jobs?.pay_amount} · {a.jobs?.job_date}</p>
+                    <p style={{ color: "var(--ink-soft)", fontSize: 14, margin: 0 }}>{a.jobs?.category} · {formatPay(a.jobs?.pay_amount, a.jobs?.pay_type)} · {a.jobs?.job_date}</p>
                   </div>
                   <span className="pl-job-cat">{a.status}</span>
                 </div>
