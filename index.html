@@ -565,6 +565,112 @@ function ReferralModal({ user, justSignedUp }) {
   );
 }
 
+function TeenProfilePage({ user, teenId, navigate, openChat }) {
+  const [teen, setTeen] = useState(null);
+  const [fiveStars, setFiveStars] = useState(0);
+  const [avgStars, setAvgStars] = useState(null);
+  const [totalRatings, setTotalRatings] = useState(0);
+  const [completedCount, setCompletedCount] = useState(0);
+  const [reviews, setReviews] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [notFound, setNotFound] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    async function load() {
+      if (!teenId || !supabaseClient) { setLoading(false); setNotFound(true); return; }
+      setLoading(true); setNotFound(false);
+
+      const { data: prof } = await supabaseClient.from("profiles").select("id, full_name, role").eq("id", teenId).single();
+      if (!active) return;
+      if (!prof || prof.role !== "teen") { setNotFound(true); setLoading(false); return; }
+      setTeen(prof);
+
+      const { data: ratings } = await supabaseClient.from("ratings").select("stars, note, created_at").eq("teen_id", teenId).order("created_at", { ascending: false });
+      const list = ratings || [];
+      const five = list.filter((r) => r.stars === 5).length;
+      const total = list.length;
+      const avg = total ? list.reduce((s, r) => s + r.stars, 0) / total : null;
+      if (active) {
+        setFiveStars(five);
+        setTotalRatings(total);
+        setAvgStars(avg);
+        setReviews(list.filter((r) => r.note && r.note.trim()));
+      }
+
+      const { count } = await supabaseClient
+        .from("jobs")
+        .select("id", { count: "exact", head: true })
+        .eq("assigned_teen_id", teenId)
+        .eq("status", "completed");
+      if (active) { setCompletedCount(count || 0); setLoading(false); }
+    }
+    load();
+    return () => { active = false; };
+  }, [teenId]);
+
+  if (loading) {
+    return <section className="pl-section"><div className="pl-wrap"><p style={{ color: "var(--ink-soft)" }}>Loading…</p></div></section>;
+  }
+  if (notFound) {
+    return (
+      <section className="pl-section">
+        <div className="pl-wrap" style={{ maxWidth: 520 }}>
+          <div className="pl-eyebrow"><Beacon /> Profile</div>
+          <h1 style={{ fontSize: "clamp(24px,3vw,32px)", marginBottom: 12 }}>Profile not found.</h1>
+          <button className="pl-btn pl-btn-outline" onClick={() => navigate("rate-job")}>Back</button>
+        </div>
+      </section>
+    );
+  }
+
+  const tier = getBadgeTier(fiveStars);
+  const stars = "★★★★★".slice(0, Math.round(avgStars || 0)) + "☆☆☆☆☆".slice(0, 5 - Math.round(avgStars || 0));
+
+  return (
+    <section className="pl-section">
+      <div className="pl-wrap" style={{ maxWidth: 640 }}>
+        <div className="pl-eyebrow"><Beacon /> Teen worker profile</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 24, flexWrap: "wrap" }}>
+          {tier && <BadgeIcon tier={tier} size={56} />}
+          <div>
+            <h1 style={{ fontSize: "clamp(24px,3vw,32px)", marginBottom: 4 }}>{teen.full_name}</h1>
+            <p style={{ color: "var(--ink-soft)", margin: 0 }}>{tier ? `${tier.name} tier` : "No badge yet"}</p>
+          </div>
+        </div>
+
+        <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 28 }}>
+          <div className="pl-form-card" style={{ flex: "1 1 150px", textAlign: "center" }}>
+            <div style={{ fontSize: 26, fontWeight: 800 }}>{avgStars ? avgStars.toFixed(1) : "—"}</div>
+            <div style={{ color: "var(--amber-deep)", fontSize: 18 }}>{avgStars ? stars : ""}</div>
+            <div style={{ color: "var(--ink-soft)", fontSize: 13 }}>{totalRatings} rating{totalRatings === 1 ? "" : "s"}</div>
+          </div>
+          <div className="pl-form-card" style={{ flex: "1 1 150px", textAlign: "center" }}>
+            <div style={{ fontSize: 26, fontWeight: 800 }}>{fiveStars}</div>
+            <div style={{ color: "var(--ink-soft)", fontSize: 13 }}>five-star jobs</div>
+          </div>
+          <div className="pl-form-card" style={{ flex: "1 1 150px", textAlign: "center" }}>
+            <div style={{ fontSize: 26, fontWeight: 800 }}>{completedCount}</div>
+            <div style={{ color: "var(--ink-soft)", fontSize: 13 }}>jobs completed</div>
+          </div>
+        </div>
+
+        <h2 style={{ fontSize: 18, marginBottom: 12 }}>What homeowners said</h2>
+        {reviews.length === 0 ? (
+          <p style={{ color: "var(--ink-soft)" }}>No written reviews yet.</p>
+        ) : (
+          reviews.map((r, i) => (
+            <div className="pl-form-card" key={i} style={{ marginBottom: 12 }}>
+              <div style={{ color: "var(--amber-deep)", fontSize: 15, marginBottom: 4 }}>{"★".repeat(r.stars)}{"☆".repeat(5 - r.stars)}</div>
+              <p style={{ margin: 0, fontSize: 14.5 }}>{r.note}</p>
+            </div>
+          ))
+        )}
+      </div>
+    </section>
+  );
+}
+
 function AdminPage({ user, navigate }) {
   const [allowed, setAllowed] = useState(null); // null = checking
   const [referrals, setReferrals] = useState([]);
@@ -2005,7 +2111,7 @@ function RatingStars({ value, onChange, disabled }) {
   );
 }
 
-function RateJobPage({ navigate, user, openChat }) {
+function RateJobPage({ navigate, user, openChat, openTeenProfile }) {
   const [openJobs, setOpenJobs] = useState([]);
   const [assignedJobs, setAssignedJobs] = useState([]);
   const [completedJobs, setCompletedJobs] = useState([]);
@@ -2108,6 +2214,18 @@ function RateJobPage({ navigate, user, openChat }) {
     loadData();
   };
 
+  const cancelJob = async (job, isAssigned) => {
+    if (!window.confirm(isAssigned ? "Cancel this job? It'll be removed and the teen will no longer see it as active." : "Cancel and remove this job posting?")) return;
+    setError(""); setSuccess(""); setSaving(true);
+    // Reset any applications on this job, then mark the job cancelled.
+    await supabaseClient.from("job_applications").update({ status: "declined" }).eq("job_id", job.id).in("status", ["pending", "accepted"]);
+    const { error: cancelErr } = await supabaseClient.from("jobs").update({ status: "cancelled", assigned_teen_id: null }).eq("id", job.id);
+    setSaving(false);
+    if (cancelErr) { setError(cancelErr.message); return; }
+    setSuccess(`"${job.title}" was cancelled.`);
+    loadData();
+  };
+
   const openRatingForm = (job) => {
     setSuccess("");
     setRatingTarget({ jobId: job.id, teenId: job.assigned_teen_id, jobTitle: job.title, teenName: teenNames[job.assigned_teen_id] || "this teen" });
@@ -2200,10 +2318,13 @@ function RateJobPage({ navigate, user, openChat }) {
                   <h3 style={{ marginBottom: 12 }}>{job.title}</h3>
                   {job.applicants.map((a) => (
                     <div key={a.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, gap: 12, flexWrap: "wrap", paddingBottom: 12, borderBottom: "1px solid var(--line)" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <button
+                        onClick={() => openTeenProfile(a.teen_id)}
+                        style={{ display: "flex", alignItems: "center", gap: 10, background: "none", border: "none", cursor: "pointer", textAlign: "left", padding: 0 }}
+                      >
                         {a.tier ? <BadgeIcon tier={a.tier} size={32} /> : null}
                         <div>
-                          <div style={{ fontWeight: 700 }}>{a.profiles?.full_name || "Applicant"}</div>
+                          <div style={{ fontWeight: 700, textDecoration: "underline" }}>{a.profiles?.full_name || "Applicant"}</div>
                           <div style={{ fontSize: 13, color: "var(--ink-soft)" }}>
                             {a.tier ? `${a.tier.name} tier` : "No badge yet"}
                             {a.ratingCount > 0
@@ -2211,7 +2332,7 @@ function RateJobPage({ navigate, user, openChat }) {
                               : " · no ratings yet"}
                           </div>
                         </div>
-                      </div>
+                      </button>
                       <button className="pl-btn pl-btn-amber pl-btn-sm" onClick={() => acceptApplicant(job, a)} disabled={saving}>Accept</button>
                     </div>
                   ))}
@@ -2235,6 +2356,7 @@ function RateJobPage({ navigate, user, openChat }) {
                     <div style={{ display: "flex", gap: 8 }}>
                       <button className="pl-btn pl-btn-outline pl-btn-sm" onClick={() => openChat(job.id)}>Message</button>
                       <button className="pl-btn pl-btn-amber pl-btn-sm" onClick={() => openRatingForm(job)}>Mark done & rate</button>
+                      <button className="pl-btn pl-btn-outline pl-btn-sm" onClick={() => cancelJob(job, true)} disabled={saving} style={{ color: "#B4321F" }}>Cancel</button>
                     </div>
                   </div>
                 </div>
@@ -2271,7 +2393,7 @@ function RateJobPage({ navigate, user, openChat }) {
 /* ------------------------------------------------------------------ */
 /*  Page: Messages (per-job chat between homeowner and accepted teen) */
 /* ------------------------------------------------------------------ */
-function MessagesPage({ navigate, user, jobId, openChat }) {
+function MessagesPage({ navigate, user, jobId, openChat, onRead }) {
   const [job, setJob] = useState(null);
   const [otherName, setOtherName] = useState("");
   const [messages, setMessages] = useState([]);
@@ -2366,6 +2488,7 @@ function MessagesPage({ navigate, user, jobId, openChat }) {
         { user_id: user.id, job_id: jobId, last_read_at: new Date().toISOString() },
         { onConflict: "user_id,job_id" }
       );
+      if (onRead) onRead();
 
       channel = supabaseClient
         .channel("messages-" + jobId)
@@ -2376,7 +2499,7 @@ function MessagesPage({ navigate, user, jobId, openChat }) {
             supabaseClient.from("message_reads").upsert(
               { user_id: user.id, job_id: jobId, last_read_at: new Date().toISOString() },
               { onConflict: "user_id,job_id" }
-            );
+            ).then(() => { if (onRead) onRead(); });
           }
         })
         .subscribe();
@@ -2508,7 +2631,7 @@ function MessagesPage({ navigate, user, jobId, openChat }) {
   );
 }
 
-function ProfilePage({ navigate, user, setUser, openChat }) {
+function ProfilePage({ navigate, user, setUser, openChat, openTeenProfile }) {
   const [nameInput, setNameInput] = useState(user?.name || "");
   const [savingName, setSavingName] = useState(false);
   const [nameSaved, setNameSaved] = useState(false);
@@ -2620,13 +2743,16 @@ function ProfilePage({ navigate, user, setUser, openChat }) {
         {user.role === "teen" && (
           <div className="pl-form-card" style={{ marginBottom: 24, display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
             {tier && <BadgeIcon tier={tier} size={48} />}
-            <div>
+            <div style={{ flex: 1 }}>
               <h3 style={{ marginBottom: 4 }}>{tier ? `${tier.name} tier` : "No badge yet"}</h3>
               <p style={{ color: "var(--ink-soft)", fontSize: 14, margin: 0 }}>
                 {fiveStarCount} five-star rating{fiveStarCount === 1 ? "" : "s"}
                 {totalRatings > fiveStarCount ? ` (${totalRatings} ratings total)` : ""} — this updates automatically as homeowners rate your completed jobs. There's no way to set this yourself.
               </p>
             </div>
+            {openTeenProfile && (
+              <button className="pl-btn pl-btn-outline pl-btn-sm" onClick={() => openTeenProfile(user.id)}>View my public profile</button>
+            )}
           </div>
         )}
 
@@ -3022,8 +3148,10 @@ function PorchlightApp() {
   const [homeownerStatus, setHomeownerStatus] = useState("none");
   const [user, setUser] = useState(null);
   const [chatJobId, setChatJobId] = useState(null);
+  const [viewedTeenId, setViewedTeenId] = useState(null);
   const [justSignedUp, setJustSignedUp] = useState(false);
   const [hasUnread, setHasUnread] = useState(false);
+  const [unreadTick, setUnreadTick] = useState(0);
   const [isAdmin, setIsAdmin] = useState(false);
 
   // Founders can still see and test the full working app on the real
@@ -3041,6 +3169,10 @@ function PorchlightApp() {
   const openChat = (jobId) => {
     setChatJobId(jobId);
     navigate("messages");
+  };
+  const openTeenProfile = (teenId) => {
+    setViewedTeenId(teenId);
+    navigate("teen-profile");
   };
   const openMessagesInbox = () => {
     setChatJobId(null);
@@ -3090,7 +3222,9 @@ function PorchlightApp() {
       let unread = false;
       for (const m of msgs || []) {
         const lastRead = readMap[m.job_id];
-        if (!lastRead || new Date(m.created_at) > new Date(lastRead)) { unread = true; break; }
+        // 2s tolerance: the read marker is stamped a beat after messages load,
+        // so anything within 2s of the read time counts as already seen.
+        if (!lastRead || new Date(m.created_at).getTime() > new Date(lastRead).getTime() + 2000) { unread = true; break; }
       }
       if (active) setHasUnread(unread);
     }
@@ -3098,7 +3232,7 @@ function PorchlightApp() {
     checkUnread();
     const interval = setInterval(checkUnread, 20000);
     return () => { active = false; clearInterval(interval); };
-  }, [user, current, chatJobId]);
+  }, [user, current, chatJobId, unreadTick]);
 
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTo({ top: 0, behavior: "auto" });
@@ -3154,12 +3288,13 @@ function PorchlightApp() {
   else if (current === "post-job") Page = <PostJobPage navigate={navigate} homeownerStatus={homeownerStatus} user={user} />;
   else if (current === "browse-jobs") Page = <BrowseJobsPage navigate={navigate} user={user} />;
   else if (current === "safety") Page = <SafetyPage navigate={navigate} />;
-  else if (current === "rate-job") Page = <RateJobPage navigate={navigate} user={user} openChat={openChat} />;
+  else if (current === "rate-job") Page = <RateJobPage navigate={navigate} user={user} openChat={openChat} openTeenProfile={openTeenProfile} />;
   else if (current === "login") Page = <AuthPage navigate={navigate} setUser={setUser} siteMode={siteMode} onSignedUp={() => setJustSignedUp(true)} />;
   else if (current === "pricing") Page = <PricingPage navigate={navigate} />;
-  else if (current === "profile") Page = <ProfilePage navigate={navigate} user={user} setUser={setUser} openChat={openChat} />;
-  else if (current === "messages") Page = <MessagesPage navigate={navigate} user={user} jobId={chatJobId} openChat={openChat} />;
+  else if (current === "profile") Page = <ProfilePage navigate={navigate} user={user} setUser={setUser} openChat={openChat} openTeenProfile={openTeenProfile} />;
+  else if (current === "messages") Page = <MessagesPage navigate={navigate} user={user} jobId={chatJobId} openChat={openChat} onRead={() => setUnreadTick((t) => t + 1)} />;
   else if (current === "admin") Page = <AdminPage user={user} navigate={navigate} />;
+  else if (current === "teen-profile") Page = <TeenProfilePage user={user} teenId={viewedTeenId} navigate={navigate} openChat={openChat} />;
 
   return (
     <div className="pl-root" ref={scrollRef}>
@@ -3178,9 +3313,7 @@ root.render(<PorchlightApp />);
 </script>
 <script>
   var src = document.getElementById("app-source").textContent;
-  var out = Babel.transform(src, {
-    presets: [["react", { runtime: "classic" }]]
-  }).code;
+  var out = Babel.transform(src, { presets: [["react", { runtime: "classic" }]] }).code;
   var s = document.createElement("script");
   s.text = out;
   document.body.appendChild(s);
