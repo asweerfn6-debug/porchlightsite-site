@@ -1001,7 +1001,7 @@ function TrustStrip() {
   return (
     <div className="pl-strip">
       <div className="pl-wrap">
-        <span><IconLock />ID-verified & background-checked homeowners</span>
+        <span><IconLock />ID-verified homeowners</span>
         <span><IconFamily />Every teen account starts with parent sign-off</span>
         <span><IconPin />Location shown only after a job is approved</span>
         <span><IconChat />All chats stay in-app, visible to parents</span>
@@ -1057,7 +1057,7 @@ function PilotBanner() {
 function SafetyGrid({ compact }) {
   const cards = [
     { icon: <IconFamily />, title: "Parental consent", body: "No teen profile goes live without a parent or guardian completing consent and identity checks first.", pop: true },
-    { icon: <IconCheck />, title: "Verified homeowners", body: "Every homeowner passes ID verification and a background check before their first job goes live.", pop: true },
+    { icon: <IconCheck />, title: "Verified homeowners", body: "Every homeowner passes ID verification before their first job goes live.", pop: true },
     { icon: <IconChat />, title: "In-app messaging only", body: "All contact happens inside Porchlight and is visible to a linked parent account — no outside numbers exchanged." },
     { icon: <IconPin />, title: "Approximate location", body: "Exact addresses stay hidden until a parent approves the specific job — never before." },
     { icon: <IconStar />, title: "Ratings & badges", body: "Homeowners and teens rate each other after every job. Teens earn Copper-to-Diamond badges as 5-star ratings add up, so trust is visible at a glance." },
@@ -1106,7 +1106,7 @@ function HomePage({ navigate, siteMode }) {
               </div>
             )}
             <div className="pl-trust-row">
-              <span><IconCheck />{siteMode === "waitlist" ? "Background checks required before launch" : "Background-checked homeowners"}</span>
+              <span><IconCheck />{siteMode === "waitlist" ? "ID verification required before launch" : "ID-verified homeowners"}</span>
               <span><IconShield />Parent approval on every job</span>
             </div>
           </div>
@@ -1819,8 +1819,8 @@ function ConsentPage({ navigate, user }) {
           <p><strong>1. Who is signing.</strong> I am the parent or legal guardian of the minor named below ("my teen"), and I have legal authority to consent on their behalf.</p>
           <p><strong>2. What I am consenting to.</strong> I consent to my teen creating a Porchlight account, having a profile visible to verified homeowners in our town, applying for and performing jobs from Porchlight's approved list, and exchanging messages with homeowners inside the Porchlight app.</p>
           <p><strong>3. What Porchlight is, and is not.</strong> Porchlight is a platform that lets families find each other. Porchlight is not my teen's employer, is not the homeowner's employer, does not supervise, direct, or inspect any job, does not visit any home, and is not present when work is performed. Porchlight is not a party to the arrangement between my teen and a homeowner.</p>
-          <p><strong>4. What I am acknowledging about risk.</strong> Work in and around a private home carries real risk — physical injury from tools, weather, terrain, or animals; property damage; and the risk that a person is not who they present themselves to be. Porchlight's safety measures reduce these risks. They do not eliminate them. A background check reports only what appears in public records and is not a guarantee of anyone's character or future conduct.</p>
-          <p><strong>5. What Porchlight commits to.</strong> Verify each homeowner's identity and background before their first job; withhold the job address until I approve the job; keep every message between my teen and any homeowner visible in my linked parent account, with no way to disable this; restrict jobs to the approved, age-tiered list and structurally prevent my teen from seeing jobs outside their tier; review any report concerning a minor's safety promptly; never sell my teen's data or use it for targeted advertising or engagement-maximizing design; notify me immediately if my teen uses an End Job & Alert feature, including their job location; route all earnings to a parent-controlled account, never directly to my teen.</p>
+          <p><strong>4. What I am acknowledging about risk.</strong> Work in and around a private home carries real risk — physical injury from tools, weather, terrain, or animals; property damage; and the risk that a person is not who they present themselves to be. Porchlight's safety measures reduce these risks. They do not eliminate them.</p>
+          <p><strong>5. What Porchlight commits to.</strong> Verify each homeowner's identity before their first job; withhold the job address until I approve the job; keep every message between my teen and any homeowner visible in my linked parent account, with no way to disable this; restrict jobs to the approved, age-tiered list and structurally prevent my teen from seeing jobs outside their tier; review any report concerning a minor's safety promptly; never sell my teen's data or use it for targeted advertising or engagement-maximizing design; notify me immediately if my teen uses an End Job & Alert feature, including their job location; route all earnings to a parent-controlled account, never directly to my teen.</p>
           <p><strong>6. What I commit to.</strong> Review each job before approving it, including the address, task, and scheduled time; know where my teen is and when they're expected back; tell my teen they may leave any job at any time, for any reason, without asking me first, and that I will back them for doing it; monitor the messages I have access to; report anything that concerns me — and contact 911 or my state's child protective services hotline directly if a child may be in danger, without waiting on Porchlight; not permit my teen to accept jobs outside the approved list, off-platform, or outside their age tier, even if a homeowner asks nicely.</p>
           <p><strong>7. Approval is per job, not once.</strong> This consent does not pre-approve future jobs. Every job requires my separate approval before the address is released.</p>
           <p><strong>8. Payments.</strong> Earnings are directed to a parent-controlled account, not to my teen directly. I am responsible for any tax reporting that applies to our family, and Porchlight does not provide tax advice.</p>
@@ -3231,7 +3231,7 @@ function SafetyPage({ navigate }) {
             </details>
             <details>
               <summary>How do you screen homeowners?<span className="chev">＋</span></summary>
-              <p>Every homeowner verifies their identity and passes a background check before their first job can go live, renewed on an ongoing basis.</p>
+              <p>Every homeowner verifies their identity before their first job can go live, renewed on an ongoing basis.</p>
             </details>
             <details>
               <summary>Can I see who my teen is talking to?<span className="chev">＋</span></summary>
