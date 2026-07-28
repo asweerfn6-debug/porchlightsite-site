@@ -2479,6 +2479,12 @@ function MessagesPage({ navigate, user, jobId, openChat, onRead }) {
   const [inbox, setInbox] = useState([]);
   const [inboxLoading, setInboxLoading] = useState(true);
   const [inboxError, setInboxError] = useState("");
+  const [showRating, setShowRating] = useState(false);
+  const [stars, setStars] = useState(0);
+  const [note, setNote] = useState("");
+  const [ratingSaving, setRatingSaving] = useState(false);
+  const [ratingError, setRatingError] = useState("");
+  const [ratingDone, setRatingDone] = useState(null); // holds {stars, note} once submitted or already rated
   const scrollRef = useRef(null);
 
   useEffect(() => {
@@ -2543,6 +2549,11 @@ function MessagesPage({ navigate, user, jobId, openChat, onRead }) {
       if (!active) return;
       setJob(jobRow);
 
+      if (jobRow.status === "completed") {
+        const { data: existingRating } = await supabaseClient.from("ratings").select("stars, note").eq("job_id", jobId).single();
+        if (active && existingRating) setRatingDone(existingRating);
+      }
+
       const otherId = user.role === "homeowner" ? jobRow.assigned_teen_id : jobRow.homeowner_id;
       if (otherId) {
         const { data: otherProfile } = await supabaseClient.from("profiles").select("full_name").eq("id", otherId).single();
@@ -2601,6 +2612,25 @@ function MessagesPage({ navigate, user, jobId, openChat, onRead }) {
     setBody("");
   };
 
+  const submitRatingHere = async () => {
+    if (stars === 0) { setRatingError("Choose a star rating before submitting."); return; }
+    setRatingError(""); setRatingSaving(true);
+    const { error: updateErr } = await supabaseClient.from("jobs").update({ status: "completed" }).eq("id", jobId);
+    if (updateErr) { setRatingSaving(false); setRatingError(updateErr.message); return; }
+    const { error: ratingErr } = await supabaseClient.from("ratings").insert({
+      job_id: jobId,
+      homeowner_id: user.id,
+      teen_id: job.assigned_teen_id,
+      stars,
+      note,
+    });
+    setRatingSaving(false);
+    if (ratingErr) { setRatingError(ratingErr.message); return; }
+    setRatingDone({ stars, note });
+    setShowRating(false);
+    setJob((prev) => ({ ...prev, status: "completed" }));
+  };
+
   if (!user) {
     return (
       <section className="pl-section">
@@ -2654,6 +2684,39 @@ function MessagesPage({ navigate, user, jobId, openChat, onRead }) {
         <div className="pl-eyebrow"><Beacon /> Messages</div>
         <h1 style={{ fontSize: "clamp(26px,3.2vw,34px)", marginBottom: 4 }}>{job ? job.title : "Conversation"}</h1>
         <p style={{ color: "var(--ink-soft)", marginBottom: 6 }}>{otherName ? `With ${otherName}` : ""}</p>
+
+        {user.role === "homeowner" && job?.status === "assigned" && (
+          <div className="pl-form-card" style={{ marginBottom: 20 }}>
+            {!showRating ? (
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
+                <span style={{ fontWeight: 700 }}>Job in progress</span>
+                <button className="pl-btn pl-btn-amber pl-btn-sm" onClick={() => { setShowRating(true); setStars(0); setNote(""); setRatingError(""); }}>Mark done & rate</button>
+              </div>
+            ) : (
+              <div>
+                <div style={{ fontWeight: 700, marginBottom: 10 }}>How did the job go?</div>
+                <div className="pl-field">
+                  <RatingStars value={stars} onChange={setStars} disabled={ratingSaving} />
+                </div>
+                <div className="pl-field">
+                  <label htmlFor="msg-rate-note">Optional note for {otherName || "the teen"}</label>
+                  <textarea className="pl-textarea" id="msg-rate-note" placeholder="e.g. Showed up on time, did great work" value={note} onChange={(e) => setNote(e.target.value)} disabled={ratingSaving} />
+                </div>
+                {ratingError && <div className="pl-age-note" style={{ marginBottom: 12 }}><IconAlert /><span>{ratingError}</span></div>}
+                <div style={{ display: "flex", gap: 10 }}>
+                  <button className="pl-btn pl-btn-amber" onClick={submitRatingHere} disabled={ratingSaving}>{ratingSaving ? "Saving…" : "Submit rating"}</button>
+                  <button className="pl-btn pl-btn-outline" onClick={() => setShowRating(false)} disabled={ratingSaving}>Cancel</button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {ratingDone && (
+          <div className="pl-confirm" style={{ marginBottom: 20 }}>
+            <IconCheck /> Rated {"★".repeat(ratingDone.stars)}{"☆".repeat(5 - ratingDone.stars)}{ratingDone.note ? ` — "${ratingDone.note}"` : ""}
+          </div>
+        )}
         <div className="pl-age-note" style={{ marginBottom: 20 }}>
           <IconAlert /><span>For your safety, keep every conversation in Porchlight — never share phone numbers, email, or social media here.</span>
         </div>
