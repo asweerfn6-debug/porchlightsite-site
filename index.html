@@ -629,7 +629,7 @@ function TeenProfilePage({ user, teenId, navigate, openChat }) {
         <div className="pl-wrap" style={{ maxWidth: 520 }}>
           <div className="pl-eyebrow"><Beacon /> Profile</div>
           <h1 style={{ fontSize: "clamp(24px,3vw,32px)", marginBottom: 12 }}>Profile not found.</h1>
-          <button className="pl-btn pl-btn-outline" onClick={() => navigate("rate-job")}>Back</button>
+          <button className="pl-btn pl-btn-outline" onClick={() => navigate("profile")}>Back</button>
         </div>
       </section>
     );
@@ -1305,7 +1305,7 @@ function ParentsPage({ navigate, user, homeownerStatus, setHomeownerStatus }) {
             <h2>Have a job that's done?</h2>
             <p className="pl-lede" style={{ marginTop: 10 }}>Mark it complete and rate the teen who did it — this is what moves them up a badge tier.</p>
           </div>
-          <button className="pl-btn pl-btn-amber" onClick={() => navigate("rate-job")}>Rate a completed job</button>
+          <button className="pl-btn pl-btn-amber" onClick={() => navigate("profile")}>View your jobs</button>
         </div>
       </section>
     </>
@@ -2726,7 +2726,7 @@ function ProfilePage({ navigate, user, setUser, openChat, openTeenProfile }) {
       if (user.role === "homeowner") {
         const { data } = await supabaseClient
           .from("jobs")
-          .select("id, title, category, status, pay_amount, pay_type, job_date")
+          .select("id, title, category, status, pay_amount, pay_type, job_date, assigned_teen_id, teen_marked_done")
           .eq("homeowner_id", user.id)
           .order("job_date", { ascending: false });
         const jobs = data || [];
@@ -2741,7 +2741,31 @@ function ProfilePage({ navigate, user, setUser, openChat, openTeenProfile }) {
             .eq("status", "pending");
           (apps || []).forEach((a) => { counts[a.job_id] = (counts[a.job_id] || 0) + 1; });
         }
-        if (active) setListings(jobs.map((j) => ({ ...j, pendingCount: counts[j.id] || 0 })));
+
+        // Teen names for anyone assigned to a job (assigned or completed)
+        const teenIds = [...new Set(jobs.map((j) => j.assigned_teen_id).filter(Boolean))];
+        let teenNameMap = {};
+        if (teenIds.length) {
+          const { data: profs } = await supabaseClient.from("profiles").select("id, full_name").in("id", teenIds);
+          (profs || []).forEach((p) => { teenNameMap[p.id] = p.full_name; });
+        }
+
+        // Ratings already given, for completed jobs
+        const completedJobIds = jobs.filter((j) => j.status === "completed").map((j) => j.id);
+        let ratingByJob = {};
+        if (completedJobIds.length) {
+          const { data: rts } = await supabaseClient.from("ratings").select("job_id, stars, note").in("job_id", completedJobIds);
+          (rts || []).forEach((r) => { ratingByJob[r.job_id] = r; });
+        }
+
+        if (active) {
+          setListings(jobs.map((j) => ({
+            ...j,
+            pendingCount: counts[j.id] || 0,
+            teenName: teenNameMap[j.assigned_teen_id] || "",
+            rating: ratingByJob[j.id] || null,
+          })));
+        }
       } else if (user.role === "teen") {
         const { data } = await supabaseClient
           .from("job_applications")
@@ -2778,6 +2802,122 @@ function ProfilePage({ navigate, user, setUser, openChat, openTeenProfile }) {
     setMarkedDone((prev) => ({ ...prev, [jobId]: "saving" }));
     const { error } = await supabaseClient.from("jobs").update({ teen_marked_done: true }).eq("id", jobId);
     setMarkedDone((prev) => ({ ...prev, [jobId]: error ? "error" : "done" }));
+  };
+
+  // ---- Inline job management for homeowners: expand a job right on this ----
+  // ---- page instead of navigating to a separate screen.                 ----
+  const [expandedJobId, setExpandedJobId] = useState(null);
+  const [applicantsByJob, setApplicantsByJob] = useState({});
+  const [jobActionError, setJobActionError] = useState("");
+  const [jobActionSaving, setJobActionSaving] = useState(false);
+  const [ratingTarget, setRatingTarget] = useState(null); // jobId currently being rated
+  const [stars, setStars] = useState(0);
+  const [note, setNote] = useState("");
+
+  const reloadListings = async () => {
+    if (!supabaseClient || !user) return;
+    const { data } = await supabaseClient
+      .from("jobs")
+      .select("id, title, category, status, pay_amount, pay_type, job_date, assigned_teen_id, teen_marked_done")
+      .eq("homeowner_id", user.id)
+      .order("job_date", { ascending: false });
+    const jobs = data || [];
+    const openJobIds = jobs.filter((j) => j.status === "open").map((j) => j.id);
+    let counts = {};
+    if (openJobIds.length) {
+      const { data: apps } = await supabaseClient.from("job_applications").select("job_id").in("job_id", openJobIds).eq("status", "pending");
+      (apps || []).forEach((a) => { counts[a.job_id] = (counts[a.job_id] || 0) + 1; });
+    }
+    const teenIds = [...new Set(jobs.map((j) => j.assigned_teen_id).filter(Boolean))];
+    let teenNameMap = {};
+    if (teenIds.length) {
+      const { data: profs } = await supabaseClient.from("profiles").select("id, full_name").in("id", teenIds);
+      (profs || []).forEach((p) => { teenNameMap[p.id] = p.full_name; });
+    }
+    const completedJobIds = jobs.filter((j) => j.status === "completed").map((j) => j.id);
+    let ratingByJob = {};
+    if (completedJobIds.length) {
+      const { data: rts } = await supabaseClient.from("ratings").select("job_id, stars, note").in("job_id", completedJobIds);
+      (rts || []).forEach((r) => { ratingByJob[r.job_id] = r; });
+    }
+    setListings(jobs.map((j) => ({ ...j, pendingCount: counts[j.id] || 0, teenName: teenNameMap[j.assigned_teen_id] || "", rating: ratingByJob[j.id] || null })));
+  };
+
+  const toggleExpand = async (job) => {
+    if (expandedJobId === job.id) { setExpandedJobId(null); return; }
+    setExpandedJobId(job.id);
+    setJobActionError("");
+    if (job.status === "open" && !applicantsByJob[job.id]) {
+      const { data, error } = await supabaseClient
+        .from("job_applications")
+        .select("id, teen_id, status, profiles(full_name)")
+        .eq("job_id", job.id)
+        .eq("status", "pending");
+      if (error) { setJobActionError(error.message); return; }
+      const apps = data || [];
+      const teenIds = apps.map((a) => a.teen_id);
+      let statsByTeen = {};
+      if (teenIds.length) {
+        const { data: allRatings } = await supabaseClient.from("ratings").select("teen_id, stars").in("teen_id", teenIds);
+        (allRatings || []).forEach((r) => {
+          if (!statsByTeen[r.teen_id]) statsByTeen[r.teen_id] = { total: 0, sum: 0, fiveStars: 0 };
+          statsByTeen[r.teen_id].total += 1;
+          statsByTeen[r.teen_id].sum += r.stars;
+          if (r.stars === 5) statsByTeen[r.teen_id].fiveStars += 1;
+        });
+      }
+      const enriched = apps.map((a) => {
+        const s = statsByTeen[a.teen_id] || { total: 0, sum: 0, fiveStars: 0 };
+        return { ...a, ratingCount: s.total, avgStars: s.total ? s.sum / s.total : null, tier: getBadgeTier(s.fiveStars) };
+      });
+      setApplicantsByJob((prev) => ({ ...prev, [job.id]: enriched }));
+    }
+  };
+
+  const acceptApplicantInline = async (job, applicant) => {
+    setJobActionError(""); setJobActionSaving(true);
+    const { error: appErr } = await supabaseClient.from("job_applications").update({ status: "accepted" }).eq("id", applicant.id);
+    if (appErr) { setJobActionSaving(false); setJobActionError(appErr.message); return; }
+    const { error: jobErr } = await supabaseClient.from("jobs").update({ status: "assigned", assigned_teen_id: applicant.teen_id }).eq("id", job.id);
+    if (jobErr) { setJobActionSaving(false); setJobActionError(jobErr.message); return; }
+    await supabaseClient.from("job_applications").update({ status: "declined" }).eq("job_id", job.id).eq("status", "pending");
+    setJobActionSaving(false);
+    if (openChat) { openChat(job.id); return; }
+    await reloadListings();
+  };
+
+  const cancelJobInline = async (job) => {
+    if (!window.confirm(job.status === "assigned" ? "Cancel this job? The teen will no longer see it as active." : "Cancel and remove this job posting?")) return;
+    setJobActionError(""); setJobActionSaving(true);
+    await supabaseClient.from("job_applications").update({ status: "declined" }).eq("job_id", job.id).in("status", ["pending", "accepted"]);
+    const { error } = await supabaseClient.from("jobs").update({ status: "cancelled", assigned_teen_id: null }).eq("id", job.id);
+    setJobActionSaving(false);
+    if (error) { setJobActionError(error.message); return; }
+    setExpandedJobId(null);
+    await reloadListings();
+  };
+
+  const openInlineRating = (job) => {
+    setRatingTarget(job.id);
+    setStars(0); setNote(""); setJobActionError("");
+  };
+
+  const submitInlineRating = async (job) => {
+    if (stars === 0) { setJobActionError("Choose a star rating before submitting."); return; }
+    setJobActionError(""); setJobActionSaving(true);
+    const { error: updateErr } = await supabaseClient.from("jobs").update({ status: "completed" }).eq("id", job.id);
+    if (updateErr) { setJobActionSaving(false); setJobActionError(updateErr.message); return; }
+    const { error: ratingErr } = await supabaseClient.from("ratings").insert({
+      job_id: job.id,
+      homeowner_id: user.id,
+      teen_id: job.assigned_teen_id,
+      stars,
+      note,
+    });
+    setJobActionSaving(false);
+    if (ratingErr) { setJobActionError(ratingErr.message); return; }
+    setRatingTarget(null);
+    await reloadListings();
   };
 
   const saveName = async (e) => {
@@ -2863,42 +3003,106 @@ function ProfilePage({ navigate, user, setUser, openChat, openTeenProfile }) {
                 key={j.id}
                 style={{
                   marginBottom: 12,
-                  borderColor: j.pendingCount > 0 ? "var(--amber-deep)" : undefined,
-                  borderWidth: j.pendingCount > 0 ? 2 : undefined,
+                  borderColor: j.pendingCount > 0 || j.teen_marked_done ? "var(--amber-deep)" : undefined,
+                  borderWidth: j.pendingCount > 0 || j.teen_marked_done ? 2 : undefined,
                 }}
               >
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
                   <div>
                     <h3 style={{ marginBottom: 4 }}>{j.title}</h3>
-                    <p style={{ color: "var(--ink-soft)", fontSize: 14, margin: 0 }}>{j.category} · {formatPay(j.pay_amount, j.pay_type)} · {j.job_date}</p>
+                    <p style={{ color: "var(--ink-soft)", fontSize: 14, margin: 0 }}>
+                      {j.category} · {formatPay(j.pay_amount, j.pay_type)} · {j.job_date}
+                      {j.status !== "open" && j.teenName && ` · ${j.teenName}`}
+                    </p>
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
                     <span className="pl-job-cat">{j.status}</span>
                     {j.status === "open" && j.pendingCount > 0 && (
-                      <span
-                        style={{
-                          background: "var(--amber)",
-                          color: "#3a2705",
-                          fontWeight: 800,
-                          fontSize: 12.5,
-                          padding: "4px 10px",
-                          borderRadius: 999,
-                        }}
-                      >
+                      <span style={{ background: "var(--amber)", color: "#3a2705", fontWeight: 800, fontSize: 12.5, padding: "4px 10px", borderRadius: 999 }}>
                         {j.pendingCount} applicant{j.pendingCount === 1 ? "" : "s"} waiting
                       </span>
                     )}
+                    {j.status === "assigned" && j.teen_marked_done && (
+                      <span style={{ background: "var(--amber)", color: "#3a2705", fontWeight: 800, fontSize: 12.5, padding: "4px 10px", borderRadius: 999 }}>
+                        Teen marked finished
+                      </span>
+                    )}
                     {(j.status === "open" || j.status === "assigned") && (
-                      <button className="pl-btn pl-btn-outline pl-btn-sm" onClick={() => navigate("rate-job")}>
-                        {j.status === "open" ? "View applicants" : "Manage"}
+                      <button className="pl-btn pl-btn-outline pl-btn-sm" onClick={() => toggleExpand(j)}>
+                        {expandedJobId === j.id ? "Close" : j.status === "open" ? "View applicants" : "Manage"}
                       </button>
                     )}
                   </div>
                 </div>
+
+                {/* Completed jobs show the rating right here, no click needed */}
+                {j.status === "completed" && j.rating && (
+                  <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--line)" }}>
+                    <div style={{ color: "var(--amber-deep)", fontSize: 15 }}>{"★".repeat(j.rating.stars)}{"☆".repeat(5 - j.rating.stars)}</div>
+                    {j.rating.note && <p style={{ margin: "4px 0 0", fontSize: 14 }}>{j.rating.note}</p>}
+                  </div>
+                )}
+
+                {/* Expanded, in-place management — no navigating away */}
+                {expandedJobId === j.id && (
+                  <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid var(--line)" }}>
+                    {jobActionError && <div className="pl-age-note" style={{ marginBottom: 12 }}><IconAlert /><span>{jobActionError}</span></div>}
+
+                    {j.status === "open" && (
+                      !applicantsByJob[j.id] ? (
+                        <p style={{ color: "var(--ink-soft)" }}>Loading applicants…</p>
+                      ) : applicantsByJob[j.id].length === 0 ? (
+                        <p style={{ color: "var(--ink-soft)" }}>No pending applicants right now.</p>
+                      ) : (
+                        applicantsByJob[j.id].map((a) => (
+                          <div key={a.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, gap: 12, flexWrap: "wrap", paddingBottom: 12, borderBottom: "1px solid var(--line)" }}>
+                            <button onClick={() => openTeenProfile(a.teen_id)} style={{ display: "flex", alignItems: "center", gap: 10, background: "none", border: "none", cursor: "pointer", textAlign: "left", padding: 0 }}>
+                              {a.tier ? <BadgeIcon tier={a.tier} size={32} /> : null}
+                              <div>
+                                <div style={{ fontWeight: 700, textDecoration: "underline" }}>{a.profiles?.full_name || "Applicant"}</div>
+                                <div style={{ fontSize: 13, color: "var(--ink-soft)" }}>
+                                  {a.tier ? `${a.tier.name} tier` : "No badge yet"}
+                                  {a.ratingCount > 0 ? ` · ${a.avgStars.toFixed(1)}★ avg (${a.ratingCount} rating${a.ratingCount === 1 ? "" : "s"})` : " · no ratings yet"}
+                                </div>
+                              </div>
+                            </button>
+                            <button className="pl-btn pl-btn-amber pl-btn-sm" onClick={() => acceptApplicantInline(j, a)} disabled={jobActionSaving}>Accept</button>
+                          </div>
+                        ))
+                      )
+                    )}
+
+                    {j.status === "assigned" && (
+                      ratingTarget === j.id ? (
+                        <div>
+                          <div className="pl-field">
+                            <label>How did the job go?</label>
+                            <RatingStars value={stars} onChange={setStars} disabled={jobActionSaving} />
+                          </div>
+                          <div className="pl-field">
+                            <label htmlFor={"note-" + j.id}>Optional note for the teen</label>
+                            <textarea className="pl-textarea" id={"note-" + j.id} placeholder="e.g. Showed up on time, did great work" value={note} onChange={(e) => setNote(e.target.value)} disabled={jobActionSaving} />
+                          </div>
+                          <div style={{ display: "flex", gap: 10 }}>
+                            <button className="pl-btn pl-btn-amber" onClick={() => submitInlineRating(j)} disabled={jobActionSaving}>{jobActionSaving ? "Saving…" : "Submit rating"}</button>
+                            <button className="pl-btn pl-btn-outline" onClick={() => setRatingTarget(null)} disabled={jobActionSaving}>Cancel</button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                          <button className="pl-btn pl-btn-outline pl-btn-sm" onClick={() => openChat(j.id)}>Message</button>
+                          <button className="pl-btn pl-btn-amber pl-btn-sm" onClick={() => openInlineRating(j)}>Mark done & rate</button>
+                          <button className="pl-btn pl-btn-outline pl-btn-sm" onClick={() => cancelJobInline(j)} disabled={jobActionSaving} style={{ color: "#B4321F" }}>Cancel</button>
+                        </div>
+                      )
+                    )}
+                  </div>
+                )}
               </div>
             ))
           )
         )}
+
 
         {user.role === "teen" && !loading && (
           listings.length === 0 ? (
