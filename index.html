@@ -397,17 +397,10 @@ function BadgeChip({ tier }) {
 }
 
 /* ------------------------------------------------------------------ */
-/*  Age-restricted job categories (Connecticut casual-work rule):      */
-/*  13-year-olds are limited to household-style categories; broader    */
-/*  categories (yard work, car washing) require age 14+.               */
+/*  All teen accounts are now 14+, so every job category is available   */
+/*  to every teen worker — there is no more age-based category split.   */
 /* ------------------------------------------------------------------ */
-const HOUSEHOLD_CATS = ["Pet care", "Tutoring", "Light chores"];
-const FULL_CATS = ["Yard work", "Pet care", "Tutoring", "Light chores", "Car washing"];
-function categoriesForAge(ageGroup) {
-  return ageGroup === "13" ? HOUSEHOLD_CATS : FULL_CATS;
-}
 
-/* ------------------------------------------------------------------ */
 /*  Route registry                                                     */
 /* ------------------------------------------------------------------ */
 const ROUTES = [
@@ -1001,7 +994,7 @@ function TrustStrip() {
   return (
     <div className="pl-strip">
       <div className="pl-wrap">
-        <span><IconLock />ID-verified homeowners</span>
+        <span><IconLock />ID-verified & background-checked homeowners</span>
         <span><IconFamily />Every teen account starts with parent sign-off</span>
         <span><IconPin />Location shown only after a job is approved</span>
         <span><IconChat />All chats stay in-app, visible to parents</span>
@@ -1057,7 +1050,7 @@ function PilotBanner() {
 function SafetyGrid({ compact }) {
   const cards = [
     { icon: <IconFamily />, title: "Parental consent", body: "No teen profile goes live without a parent or guardian completing consent and identity checks first.", pop: true },
-    { icon: <IconCheck />, title: "Verified homeowners", body: "Every homeowner passes ID verification before their first job goes live.", pop: true },
+    { icon: <IconCheck />, title: "Verified homeowners", body: "Every homeowner passes ID verification and a background check before their first job goes live.", pop: true },
     { icon: <IconChat />, title: "In-app messaging only", body: "All contact happens inside Porchlight and is visible to a linked parent account — no outside numbers exchanged." },
     { icon: <IconPin />, title: "Approximate location", body: "Exact addresses stay hidden until a parent approves the specific job — never before." },
     { icon: <IconStar />, title: "Ratings & badges", body: "Homeowners and teens rate each other after every job. Teens earn Copper-to-Diamond badges as 5-star ratings add up, so trust is visible at a glance." },
@@ -1106,7 +1099,7 @@ function HomePage({ navigate, siteMode }) {
               </div>
             )}
             <div className="pl-trust-row">
-              <span><IconCheck />{siteMode === "waitlist" ? "ID verification required before launch" : "ID-verified homeowners"}</span>
+              <span><IconCheck />{siteMode === "waitlist" ? "Background checks required before launch" : "Background-checked homeowners"}</span>
               <span><IconShield />Parent approval on every job</span>
             </div>
           </div>
@@ -1726,8 +1719,6 @@ function ConsentPage({ navigate, user }) {
 
   const ageTier = !user?.age
     ? ""
-    : user.age <= 13
-    ? "Below Porchlight's recommended minimum age of 14 — flag for review before this teen works"
     : user.age <= 15
     ? "Tier A (ages 14–15 — hand tools & care work only, no power equipment)"
     : "Tier B (ages 16–17 — adds push mower, trimmer, leaf blower, snow blower)";
@@ -1819,8 +1810,8 @@ function ConsentPage({ navigate, user }) {
           <p><strong>1. Who is signing.</strong> I am the parent or legal guardian of the minor named below ("my teen"), and I have legal authority to consent on their behalf.</p>
           <p><strong>2. What I am consenting to.</strong> I consent to my teen creating a Porchlight account, having a profile visible to verified homeowners in our town, applying for and performing jobs from Porchlight's approved list, and exchanging messages with homeowners inside the Porchlight app.</p>
           <p><strong>3. What Porchlight is, and is not.</strong> Porchlight is a platform that lets families find each other. Porchlight is not my teen's employer, is not the homeowner's employer, does not supervise, direct, or inspect any job, does not visit any home, and is not present when work is performed. Porchlight is not a party to the arrangement between my teen and a homeowner.</p>
-          <p><strong>4. What I am acknowledging about risk.</strong> Work in and around a private home carries real risk — physical injury from tools, weather, terrain, or animals; property damage; and the risk that a person is not who they present themselves to be. Porchlight's safety measures reduce these risks. They do not eliminate them.</p>
-          <p><strong>5. What Porchlight commits to.</strong> Verify each homeowner's identity before their first job; withhold the job address until I approve the job; keep every message between my teen and any homeowner visible in my linked parent account, with no way to disable this; restrict jobs to the approved, age-tiered list and structurally prevent my teen from seeing jobs outside their tier; review any report concerning a minor's safety promptly; never sell my teen's data or use it for targeted advertising or engagement-maximizing design; notify me immediately if my teen uses an End Job & Alert feature, including their job location; route all earnings to a parent-controlled account, never directly to my teen.</p>
+          <p><strong>4. What I am acknowledging about risk.</strong> Work in and around a private home carries real risk — physical injury from tools, weather, terrain, or animals; property damage; and the risk that a person is not who they present themselves to be. Porchlight's safety measures reduce these risks. They do not eliminate them. A background check reports only what appears in public records and is not a guarantee of anyone's character or future conduct.</p>
+          <p><strong>5. What Porchlight commits to.</strong> Verify each homeowner's identity and background before their first job; withhold the job address until I approve the job; keep every message between my teen and any homeowner visible in my linked parent account, with no way to disable this; restrict jobs to the approved, age-tiered list and structurally prevent my teen from seeing jobs outside their tier; review any report concerning a minor's safety promptly; never sell my teen's data or use it for targeted advertising or engagement-maximizing design; notify me immediately if my teen uses an End Job & Alert feature, including their job location; route all earnings to a parent-controlled account, never directly to my teen.</p>
           <p><strong>6. What I commit to.</strong> Review each job before approving it, including the address, task, and scheduled time; know where my teen is and when they're expected back; tell my teen they may leave any job at any time, for any reason, without asking me first, and that I will back them for doing it; monitor the messages I have access to; report anything that concerns me — and contact 911 or my state's child protective services hotline directly if a child may be in danger, without waiting on Porchlight; not permit my teen to accept jobs outside the approved list, off-platform, or outside their age tier, even if a homeowner asks nicely.</p>
           <p><strong>7. Approval is per job, not once.</strong> This consent does not pre-approve future jobs. Every job requires my separate approval before the address is released.</p>
           <p><strong>8. Payments.</strong> Earnings are directed to a parent-controlled account, not to my teen directly. I am responsible for any tax reporting that applies to our family, and Porchlight does not provide tax advice.</p>
@@ -2033,7 +2024,6 @@ function JobMap({ jobs, onViewJob }) {
 }
 
 function BrowseJobsPage({ navigate, user }) {
-  const [ageGroup, setAgeGroup] = useState(user?.role === "teen" && user?.age === 13 ? "13" : "14plus");
   const [filter, setFilter] = useState("All");
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -2071,17 +2061,7 @@ function BrowseJobsPage({ navigate, user }) {
     return () => { active = false; };
   }, [user]);
 
-  const allowedCats = categoriesForAge(ageGroup === "13" ? "13" : "14plus");
-  const visibleChipCats = ageGroup === "13" ? ["All", ...HOUSEHOLD_CATS] : ALL_CATS;
-
-  const setAge = (g) => {
-    setAgeGroup(g);
-    setFilter("All"); // reset filter so a now-locked category chip can't stay selected
-  };
-
-  const visibleJobs = jobs.filter((j) => allowedCats.includes(j.category));
-  const list = filter === "All" ? visibleJobs : visibleJobs.filter((j) => j.category === filter);
-  const lockedJobsCount = jobs.length - visibleJobs.length;
+  const list = filter === "All" ? jobs : jobs.filter((j) => j.category === filter);
 
   const applyToJob = async (job) => {
     setApplyError("");
@@ -2112,24 +2092,6 @@ function BrowseJobsPage({ navigate, user }) {
 
         <JobMap jobs={list} onViewJob={scrollToJob} />
 
-        <div className="pl-age-gate">
-          <div>
-            <div style={{ fontWeight: 800, fontSize: 14.5, marginBottom: 4 }}>I am...</div>
-            <div style={{ color: "var(--ink-soft)", fontSize: 13.5 }}>This changes which job categories you're shown, based on Connecticut's age rules for minors' work.</div>
-          </div>
-          <div className="pl-age-toggle" role="group" aria-label="Select your age group">
-            <button className="pl-age-btn" aria-pressed={ageGroup === "13"} onClick={() => setAge("13")}>13 years old</button>
-            <button className="pl-age-btn" aria-pressed={ageGroup === "14plus"} onClick={() => setAge("14plus")}>14–17 years old</button>
-          </div>
-        </div>
-
-        {ageGroup === "13" && (
-          <div className="pl-age-note">
-            <IconAlert />
-            <span>At 13, Porchlight only shows household-style jobs — pet care, tutoring, and light chores. Yard work and car washing unlock at 14, in line with Connecticut's minimum working-age rules. {lockedJobsCount > 0 && `(${lockedJobsCount} job${lockedJobsCount === 1 ? "" : "s"} hidden for this reason.)`}</span>
-          </div>
-        )}
-
         {user?.role === "teen" && hasConsent === false && (
           <div className="pl-age-note" style={{ marginBottom: 16 }}>
             <IconAlert />
@@ -2152,7 +2114,7 @@ function BrowseJobsPage({ navigate, user }) {
         )}
 
         <div className="pl-job-filters">
-          {visibleChipCats.map((c) => (
+          {ALL_CATS.map((c) => (
             <button key={c} className={`pl-filter-chip ${filter === c ? "active" : ""}`} onClick={() => setFilter(c)}>{c}</button>
           ))}
         </div>
@@ -3058,7 +3020,7 @@ function AuthPage({ navigate, setUser, siteMode, onSignedUp }) {
     if (password.length < 8) { setError("Password must be at least 8 characters."); return; }
     if (role === "teen") {
       const ageNum = Number(age);
-      if (!age || ageNum < 13 || ageNum > 17) { setError("Teen workers must be between 13 and 17."); return; }
+      if (!age || ageNum < 14 || ageNum > 17) { setError("Teen workers must be between 14 and 17."); return; }
     }
     setError(""); setInfo(""); setLoading(true);
     const { data, error: signUpErr } = await supabaseClient.auth.signUp({
@@ -3143,7 +3105,7 @@ function AuthPage({ navigate, setUser, siteMode, onSignedUp }) {
               {role === "teen" && (
                 <div className="pl-field">
                   <label htmlFor="signup-age">Age</label>
-                  <input className="pl-input" id="signup-age" type="number" min="13" max="17" value={age} onChange={(e) => setAge(e.target.value)} placeholder="13–17" required />
+                  <input className="pl-input" id="signup-age" type="number" min="14" max="17" value={age} onChange={(e) => setAge(e.target.value)} placeholder="14–17" required />
                 </div>
               )}
               <div className="pl-field">
@@ -3231,7 +3193,7 @@ function SafetyPage({ navigate }) {
             </details>
             <details>
               <summary>How do you screen homeowners?<span className="chev">＋</span></summary>
-              <p>Every homeowner verifies their identity before their first job can go live, renewed on an ongoing basis.</p>
+              <p>Every homeowner verifies their identity and passes a background check before their first job can go live, renewed on an ongoing basis.</p>
             </details>
             <details>
               <summary>Can I see who my teen is talking to?<span className="chev">＋</span></summary>
