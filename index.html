@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Porchlight — Trusted local jobs for teens, verified for families</title>
 <meta name="description" content="Porchlight connects local homeowners with verified teen workers for small jobs, with parental consent and safety built in." />
+<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2040%2040%22%3E%3Crect%20width%3D%2240%22%20height%3D%2240%22%20rx%3D%228%22%20fill%3D%22%23F1ECDE%22/%3E%3Cpath%20d%3D%22M20%205L33%2013V34H7V13L20%205Z%22%20fill%3D%22%23232E22%22/%3E%3Ccircle%20cx%3D%2220%22%20cy%3D%2222%22%20r%3D%227%22%20fill%3D%22%23C4622D%22/%3E%3C/svg%3E" type="image/svg+xml" />
 <!-- Google Analytics -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-90DHECVYJT"></script>
 <script>
@@ -309,6 +310,11 @@ const GlobalStyle = () => (
       .pl-progress-label{font-size:12px;font-weight:700;color:var(--ink-soft);opacity:0;transform:translateX(6px);transition:all .2s ease;white-space:nowrap;}
       .pl-progress-dot:hover .pl-progress-label,.pl-progress-dot.active .pl-progress-label{opacity:1;transform:translateX(0);color:var(--ink);}
       @media (max-width:900px){.pl-progress-rail{display:none;}}
+      .pl-empty{text-align:center;padding:40px 24px;border:2px dashed var(--line);border-radius:8px;background:var(--paper);}
+      .pl-empty-icon{width:38px;height:38px;margin:0 auto 12px;color:var(--ink-soft);opacity:.55;}
+      .pl-empty-icon svg{width:100%;height:100%;}
+      .pl-empty-title{font-weight:700;color:var(--ink);margin:0 0 4px;font-size:15.5px;}
+      .pl-empty-hint{color:var(--ink-soft);font-size:13.5px;margin:0;max-width:340px;margin-left:auto;margin-right:auto;}
     `}</style>
   </>
 );
@@ -361,6 +367,16 @@ const Logo = ({ light }) => (
     <circle cx="20" cy="21" r="7" fill={light ? "#232E22" : "#C4622D"} />
   </svg>
 );
+
+function EmptyState({ icon, title, hint }) {
+  return (
+    <div className="pl-empty">
+      <div className="pl-empty-icon">{icon}</div>
+      <p className="pl-empty-title">{title}</p>
+      {hint && <p className="pl-empty-hint">{hint}</p>}
+    </div>
+  );
+}
 
 /* ------------------------------------------------------------------ */
 /*  Badge tiers — based on count of 5-star ratings earned              */
@@ -679,7 +695,7 @@ function TeenProfilePage({ user, teenId, navigate, openChat }) {
 
         <h2 style={{ fontSize: 18, marginBottom: 12 }}>What homeowners said</h2>
         {reviews.length === 0 ? (
-          <p style={{ color: "var(--ink-soft)" }}>No written reviews yet.</p>
+          <p style={{ color: "var(--ink-soft)" }}>No reviews on the board yet — they'll show up after the first completed job.</p>
         ) : (
           reviews.map((r, i) => (
             <div className="pl-form-card" key={i} style={{ marginBottom: 12 }}>
@@ -856,7 +872,7 @@ function AdminPage({ user, navigate }) {
 
         <h2 style={{ fontSize: 18, margin: "20px 0 10px" }}>How people heard about Porchlight</h2>
         {Object.keys(referralCounts).length === 0 ? (
-          <p style={{ color: "var(--ink-soft)" }}>No referral answers yet.</p>
+          <p style={{ color: "var(--ink-soft)" }}>No answers yet — they'll show up here as people sign up.</p>
         ) : (
           <div className="pl-form-card" style={{ marginBottom: 20 }}>
             {Object.entries(referralCounts).sort((a, b) => b[1] - a[1]).map(([src, count]) => (
@@ -870,7 +886,7 @@ function AdminPage({ user, navigate }) {
 
         <h2 style={{ fontSize: 18, margin: "20px 0 10px" }}>Waitlist ({waitlist.length})</h2>
         {waitlist.length === 0 ? (
-          <p style={{ color: "var(--ink-soft)" }}>No waitlist signups yet.</p>
+          <p style={{ color: "var(--ink-soft)" }}>No signups yet — share your waitlist link to get the first one.</p>
         ) : (
           <div className="pl-form-card" style={{ marginBottom: 20, overflowX: "auto" }}>
             {waitlist.map((w, i) => (
@@ -2467,7 +2483,7 @@ function RateJobPage({ navigate, user, openChat, openTeenProfile }) {
           !loading && (
             <>
               <h2 style={{ fontSize: 18, marginBottom: 12 }}>Open jobs with applicants</h2>
-              {openJobs.length === 0 && <p style={{ color: "var(--ink-soft)", marginBottom: 24 }}>No pending applicants right now.</p>}
+              {openJobs.length === 0 && <EmptyState icon={<IconChat />} title="Nothing on the porch yet" hint="New applicants will show up here the moment someone applies to one of your jobs." />}
               {openJobs.map((job) => (
                 <div className="pl-form-card" key={job.id} style={{ marginBottom: 16 }}>
                   <h3 style={{ marginBottom: 12 }}>{job.title}</h3>
@@ -2495,7 +2511,7 @@ function RateJobPage({ navigate, user, openChat, openTeenProfile }) {
               ))}
 
               <h2 style={{ fontSize: 18, margin: "28px 0 12px" }}>Assigned — mark complete when done</h2>
-              {assignedJobs.length === 0 && <p style={{ color: "var(--ink-soft)", marginBottom: 24 }}>No jobs in progress right now.</p>}
+              {assignedJobs.length === 0 && <EmptyState icon={<IconCheck />} title="No jobs in progress" hint="Once you accept an applicant, their job shows up here until it's marked done." />}
               {assignedJobs.map((job) => (
                 <div className="pl-form-card" key={job.id} style={{ marginBottom: 16, borderColor: job.teen_marked_done ? "var(--amber-deep)" : undefined, borderWidth: job.teen_marked_done ? 2 : undefined }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
@@ -2518,7 +2534,7 @@ function RateJobPage({ navigate, user, openChat, openTeenProfile }) {
               ))}
 
               <h2 style={{ fontSize: 18, margin: "28px 0 12px" }}>Completed jobs</h2>
-              {completedJobs.length === 0 && <p style={{ color: "var(--ink-soft)" }}>None yet.</p>}
+              {completedJobs.length === 0 && <EmptyState icon={<IconStar />} title="No completed jobs yet" hint="They'll land here once you mark one done and leave a rating." />}
               {completedJobs.map((job) => {
                 const r = job.ratings && job.ratings[0];
                 return (
@@ -2734,9 +2750,11 @@ function MessagesPage({ navigate, user, jobId, openChat, onRead }) {
           {inboxLoading && <p style={{ color: "var(--ink-soft)" }}>Loading…</p>}
 
           {!inboxLoading && inbox.length === 0 && (
-            <p className="pl-lede">
-              No conversations yet. {user.role === "homeowner" ? "These open up once you accept an applicant for one of your jobs." : "This opens up once a homeowner accepts you for a job."}
-            </p>
+            <EmptyState
+              icon={<IconChat />}
+              title="Quiet on the porch for now"
+              hint={user.role === "homeowner" ? "Conversations open up once you accept an applicant for one of your jobs." : "This opens up once a homeowner accepts you for a job."}
+            />
           )}
 
           {!inboxLoading && inbox.map((c) => (
@@ -3138,7 +3156,7 @@ function ProfilePage({ navigate, user, setUser, openChat, openTeenProfile }) {
 
         {user.role === "homeowner" && !loading && (
           listings.length === 0 ? (
-            <p style={{ color: "var(--ink-soft)" }}>You haven't posted any jobs yet.</p>
+            <EmptyState icon={<IconPin />} title="Nothing posted yet" hint="Your first listing takes about two minutes to put up." />
           ) : (
             listings.map((j) => (
               <div
@@ -3195,7 +3213,7 @@ function ProfilePage({ navigate, user, setUser, openChat, openTeenProfile }) {
                       !applicantsByJob[j.id] ? (
                         <p style={{ color: "var(--ink-soft)" }}>Loading applicants…</p>
                       ) : applicantsByJob[j.id].length === 0 ? (
-                        <p style={{ color: "var(--ink-soft)" }}>No pending applicants right now.</p>
+                        <p style={{ color: "var(--ink-soft)" }}>Nothing waiting here yet — check back once someone applies.</p>
                       ) : (
                         applicantsByJob[j.id].map((a) => (
                           <div key={a.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, gap: 12, flexWrap: "wrap", paddingBottom: 12, borderBottom: "1px solid var(--line)" }}>
@@ -3249,7 +3267,7 @@ function ProfilePage({ navigate, user, setUser, openChat, openTeenProfile }) {
 
         {user.role === "teen" && !loading && (
           listings.length === 0 ? (
-            <p style={{ color: "var(--ink-soft)" }}>You haven't applied to any jobs yet.</p>
+            <EmptyState icon={<IconMap />} title="No applications yet" hint="Browse jobs near you and send your first application." />
           ) : (
             listings.map((a) => (
               <div className="pl-form-card" key={a.id} style={{ marginBottom: 12 }}>
