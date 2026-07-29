@@ -118,8 +118,7 @@ const GlobalStyle = () => (
       .pl-nav{display:flex;align-items:center;padding:16px 28px;max-width:1120px;margin:0 auto;gap:24px;}
       .pl-brand{display:flex;align-items:center;gap:10px;text-decoration:none;background:none;border:none;cursor:pointer;padding:0;flex:none;}
       .pl-brand-name{font-family:'Fraunces',serif;font-weight:700;font-size:21px;color:var(--ink);}
-      .pl-nav-links{display:flex;align-items:center;gap:22px;font-weight:600;font-size:14.5px;flex:1 1 auto;min-width:0;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;}
-      .pl-nav-links::-webkit-scrollbar{display:none;}
+      .pl-nav-links{display:flex;align-items:center;gap:22px;font-weight:600;font-size:14.5px;flex:1 1 auto;min-width:0;flex-wrap:wrap;row-gap:8px;}
       .pl-nav-links button{background:none;border:none;cursor:pointer;font-family:inherit;font-weight:600;font-size:14.5px;color:var(--ink-soft);padding:6px 2px;border-bottom:2px solid transparent;white-space:nowrap;flex:none;}
       .pl-nav-links button:hover{color:var(--ink);}
       .pl-nav-links button.active{color:var(--dusk-deep);border-bottom-color:var(--amber);}
@@ -1585,6 +1584,7 @@ function PostJobPage({ navigate, homeownerStatus, user }) {
   const [idFile, setIdFile] = useState(null);
   const [idError, setIdError] = useState("");
   const [idSaving, setIdSaving] = useState(false);
+  const [planConfirmed, setPlanConfirmed] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -1718,6 +1718,24 @@ function PostJobPage({ navigate, homeownerStatus, user }) {
     );
   }
 
+  if (!planConfirmed) {
+    return (
+      <section className="pl-section">
+        <div className="pl-wrap" style={{ maxWidth: 640 }}>
+          <div className="pl-eyebrow"><Beacon /> Post a job</div>
+          <h1 style={{ fontSize: "clamp(28px,3.6vw,40px)", marginBottom: 12 }}>Choose your plan.</h1>
+          <p className="pl-lede" style={{ marginBottom: 32 }}>Pick how you'd like to pay before writing up the job — this locks in before you get to the ID step.</p>
+          <div style={{ marginBottom: 28 }}>
+            <PricingPicker plan={plan} setPlan={setPlan} />
+          </div>
+          <button className="pl-btn pl-btn-amber" onClick={() => setPlanConfirmed(true)}>
+            Continue with {plan === "single" ? "$5.99 single listing" : plan === "monthly" ? "$11.99/month unlimited" : "$119.99/year unlimited"}
+          </button>
+        </div>
+      </section>
+    );
+  }
+
   if (idProvided === null) {
     return <section className="pl-section"><div className="pl-wrap"><p style={{ color: "var(--ink-soft)" }}>Checking your account…</p></div></section>;
   }
@@ -1750,12 +1768,7 @@ function PostJobPage({ navigate, homeownerStatus, user }) {
       <div className="pl-wrap">
         <div className="pl-eyebrow"><Beacon /> Post a job</div>
         <h1 style={{ fontSize: "clamp(28px,3.6vw,40px)", marginBottom: 12 }}>Tell us what you need done.</h1>
-        <p className="pl-lede" style={{ marginBottom: 32 }}>Your listing is reviewed against Porchlight's approved job categories before it's shown to any teen worker.</p>
-
-        <h2 style={{ fontSize: 19, marginBottom: 16 }}>Choose your plan</h2>
-        <div style={{ marginBottom: 36 }}>
-          <PricingPicker plan={plan} setPlan={setPlan} />
-        </div>
+        <p className="pl-lede" style={{ marginBottom: 32 }}>Your listing is reviewed against Porchlight's approved job categories before it's shown to any teen worker. You're posting under your {plan === "single" ? "$5.99 single listing" : plan === "monthly" ? "$11.99/month unlimited" : "$119.99/year unlimited"} plan.</p>
 
         {submitted && (
           <div className="pl-confirm">
