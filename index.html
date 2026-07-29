@@ -1283,7 +1283,15 @@ function ParentsPage({ navigate, user, homeownerStatus, setHomeownerStatus }) {
 
   return (
     <>
-      <section className="pl-hero" style={{ paddingBottom: 20 }}>
+      <ScrollProgressRail
+        sections={[
+          { id: "parents-hero", label: "Welcome" },
+          { id: "parents-steps", label: "How hiring works" },
+          { id: "parents-verify", label: "Verify identity" },
+          { id: "parents-jobs", label: "Your jobs" },
+        ]}
+      />
+      <section className="pl-hero" style={{ paddingBottom: 20 }} id="parents-hero">
         <div className="pl-wrap">
           <div className="pl-eyebrow"><Beacon /> For families</div>
           <h1 style={{ fontSize: "clamp(30px,4vw,44px)" }}>Whether you're hiring help or raising the teen doing the work — you're covered.</h1>
@@ -1297,7 +1305,7 @@ function ParentsPage({ navigate, user, homeownerStatus, setHomeownerStatus }) {
 
       <TrustStrip />
 
-      <section className="pl-section">
+      <section className="pl-section" id="parents-steps">
         <div className="pl-wrap">
           <div className="pl-section-head">
             <div className="pl-eyebrow">If you need a job done</div>
@@ -1311,7 +1319,7 @@ function ParentsPage({ navigate, user, homeownerStatus, setHomeownerStatus }) {
         </div>
       </section>
 
-      <section className="pl-section pl-safety-wrap">
+      <section className="pl-section pl-safety-wrap" id="parents-verify">
         <div className="pl-wrap">
           <div className="pl-section-head">
             <div className="pl-eyebrow">Before you post</div>
@@ -1362,7 +1370,7 @@ function ParentsPage({ navigate, user, homeownerStatus, setHomeownerStatus }) {
         </div>
       </section>
 
-      <section className="pl-section" style={{ paddingTop: 0 }}>
+      <section className="pl-section" style={{ paddingTop: 0 }} id="parents-jobs">
         <div className="pl-wrap">
           <div className="pl-section-head">
             <div className="pl-eyebrow">Your jobs</div>
@@ -1381,7 +1389,7 @@ function ParentsPage({ navigate, user, homeownerStatus, setHomeownerStatus }) {
 /* ------------------------------------------------------------------ */
 function BadgeSection() {
   return (
-    <section className="pl-section">
+    <section className="pl-section" id="teens-badges">
       <div className="pl-wrap">
         <div className="pl-section-head">
           <div className="pl-eyebrow"><Beacon /> Worker badges</div>
@@ -1406,7 +1414,15 @@ function BadgeSection() {
 function TeensPage({ navigate }) {
   return (
     <>
-      <section className="pl-hero" style={{ paddingBottom: 20 }}>
+      <ScrollProgressRail
+        sections={[
+          { id: "teens-hero", label: "Welcome" },
+          { id: "teens-steps", label: "Getting started" },
+          { id: "teens-safety", label: "What protects you" },
+          { id: "teens-badges", label: "Badges" },
+        ]}
+      />
+      <section className="pl-hero" style={{ paddingBottom: 20 }} id="teens-hero">
         <div className="pl-wrap">
           <div className="pl-eyebrow"><Beacon /> For teen workers</div>
           <h1 style={{ fontSize: "clamp(30px,4vw,44px)" }}>A real way to earn, <em style={{ color: "var(--amber-deep)" }}>built around you.</em></h1>
@@ -1420,7 +1436,7 @@ function TeensPage({ navigate }) {
 
       <TrustStrip />
 
-      <section className="pl-section">
+      <section className="pl-section" id="teens-steps">
         <div className="pl-wrap">
           <div className="pl-section-head">
             <div className="pl-eyebrow">Getting started</div>
@@ -1434,7 +1450,7 @@ function TeensPage({ navigate }) {
         </div>
       </section>
 
-      <section className="pl-section pl-safety-wrap">
+      <section className="pl-section pl-safety-wrap" id="teens-safety">
         <div className="pl-wrap">
           <div className="pl-section-head">
             <div className="pl-eyebrow"><Beacon /> What protects you</div>
@@ -3464,7 +3480,15 @@ function AuthPage({ navigate, setUser, siteMode, onSignedUp }) {
 function SafetyPage({ navigate }) {
   return (
     <>
-      <section className="pl-hero" style={{ paddingBottom: 20 }}>
+      <ScrollProgressRail
+        sections={[
+          { id: "safety-hero", label: "Welcome" },
+          { id: "safety-consent", label: "What consent covers" },
+          { id: "safety-safeguards", label: "Safeguards" },
+          { id: "safety-faq", label: "Questions" },
+        ]}
+      />
+      <section className="pl-hero" style={{ paddingBottom: 20 }} id="safety-hero">
         <div className="pl-wrap">
           <div className="pl-eyebrow"><Beacon /> Consent & safety</div>
           <h1 style={{ fontSize: "clamp(30px,4vw,44px)" }}>Every feature answers a parent's first question.</h1>
@@ -3472,7 +3496,7 @@ function SafetyPage({ navigate }) {
         </div>
       </section>
 
-      <section className="pl-section" style={{ paddingTop: 0 }}>
+      <section className="pl-section" style={{ paddingTop: 0 }} id="safety-consent">
         <div className="pl-wrap">
           <div className="pl-section-head">
             <div className="pl-eyebrow">What parental consent covers</div>
@@ -3501,7 +3525,7 @@ function SafetyPage({ navigate }) {
         </div>
       </section>
 
-      <section className="pl-section pl-safety-wrap">
+      <section className="pl-section pl-safety-wrap" id="safety-safeguards">
         <div className="pl-wrap">
           <div className="pl-section-head">
             <div className="pl-eyebrow">Built safety-first</div>
@@ -3511,7 +3535,7 @@ function SafetyPage({ navigate }) {
         </div>
       </section>
 
-      <section className="pl-section">
+      <section className="pl-section" id="safety-faq">
         <div className="pl-wrap">
           <div className="pl-section-head">
             <div className="pl-eyebrow">Questions</div>
