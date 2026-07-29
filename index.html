@@ -619,7 +619,7 @@ function TeenProfilePage({ user, teenId, navigate, openChat }) {
       if (!teenId || !supabaseClient) { setLoading(false); setNotFound(true); return; }
       setLoading(true); setNotFound(false);
 
-      const { data: prof } = await supabaseClient.from("profiles").select("id, full_name, role").eq("id", teenId).single();
+      const { data: prof } = await supabaseClient.from("profiles").select("id, full_name, role, bio, avatar_url").eq("id", teenId).single();
       if (!active) return;
       if (!prof || prof.role !== "teen") { setNotFound(true); setLoading(false); return; }
       setTeen(prof);
@@ -670,6 +670,13 @@ function TeenProfilePage({ user, teenId, navigate, openChat }) {
       <div className="pl-wrap" style={{ maxWidth: 640 }}>
         <div className="pl-eyebrow"><Beacon /> Teen worker profile</div>
         <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 24, flexWrap: "wrap" }}>
+          {teen.avatar_url ? (
+            <img src={teen.avatar_url} alt={teen.full_name} style={{ width: 56, height: 56, borderRadius: "50%", objectFit: "cover", border: "2px solid var(--line)" }} />
+          ) : (
+            <div style={{ width: 56, height: 56, borderRadius: "50%", background: "var(--card)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--ink-soft)", fontWeight: 800, fontSize: 20, flex: "none" }}>
+              {teen.full_name?.[0]?.toUpperCase() || "?"}
+            </div>
+          )}
           {tier && <BadgeIcon tier={tier} size={56} />}
           <div>
             <h1 style={{ fontSize: "clamp(24px,3vw,32px)", marginBottom: 4 }}>{teen.full_name}</h1>
@@ -677,6 +684,7 @@ function TeenProfilePage({ user, teenId, navigate, openChat }) {
           </div>
         </div>
 
+        {teen.bio && <p style={{ fontSize: 15.5, marginBottom: 24, maxWidth: 520 }}>{teen.bio}</p>}
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 28 }}>
           <div className="pl-form-card" style={{ flex: "1 1 150px", textAlign: "center" }}>
             <div style={{ fontSize: 26, fontWeight: 800 }}>{avgStars ? avgStars.toFixed(1) : "—"}</div>
@@ -1358,11 +1366,6 @@ function ParentsPage({ navigate, user, homeownerStatus, setHomeownerStatus }) {
                       <label htmlFor="hw-dob">Date of birth</label>
                       <input className="pl-input" id="hw-dob" type="date" value={dob} onChange={(e) => setDob(e.target.value)} required disabled={homeownerStatus !== "none"} />
                     </div>
-                    <div className="pl-field">
-                      <label htmlFor="hw-id">Government-issued ID (optional for now)</label>
-                      <input className="pl-input" id="hw-id" type="file" accept="image/*,.pdf" disabled={homeownerStatus !== "none"} />
-                      <span className="hint">You can skip this for now — it's not required yet. Once real Stripe Identity verification is live, this becomes required and is verified securely without Porchlight storing the raw document.</span>
-                    </div>
                     {vError && <div className="pl-age-note"><IconAlert /><span>{vError}</span></div>}
                     {homeownerStatus === "none" && (
                       <button type="submit" className="pl-btn pl-btn-amber">Verify identity</button>
@@ -1524,6 +1527,17 @@ const JOB_CATEGORIES = ["Yard work", "Pet care", "Tutoring", "Light chores", "Ca
 // This is a normal client-side geocoding lookup (Mapbox explicitly supports
 // this with a public token). It is NOT the randomization step; that happens
 // only in the database.
+// Straight-line miles between two lat/lng points (haversine formula).
+// Used for the "search within X miles" radius filter on Browse Jobs.
+function milesBetween(lat1, lng1, lat2, lng2) {
+  const R = 3958.8; // earth radius in miles
+  const toRad = (d) => (d * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
 async function geocodeAddress(address) {
   if (!MAPBOX_ACCESS_TOKEN || MAPBOX_ACCESS_TOKEN.startsWith("PASTE_YOUR")) {
     throw new Error("Mapbox isn't configured yet — paste your public token into MAPBOX_ACCESS_TOKEN near the top of the file.");
@@ -1566,6 +1580,31 @@ function PostJobPage({ navigate, homeownerStatus, user }) {
   const [desc, setDesc] = useState("");
   const [areaLoading, setAreaLoading] = useState(false);
   const geocodeCacheRef = useRef({ address: "", result: null });
+  const [idProvided, setIdProvided] = useState(null); // null = checking, true/false once known
+  const [idFile, setIdFile] = useState(null);
+  const [idError, setIdError] = useState("");
+  const [idSaving, setIdSaving] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    async function checkId() {
+      if (!supabaseClient || !user) { setIdProvided(false); return; }
+      const { data } = await supabaseClient.from("homeowner_verification").select("id_provided").eq("homeowner_id", user.id).single();
+      if (active) setIdProvided(!!data?.id_provided);
+    }
+    checkId();
+    return () => { active = false; };
+  }, [user]);
+
+  const submitId = async (e) => {
+    e.preventDefault();
+    if (!idFile) { setIdError("Choose a photo of your government ID to continue."); return; }
+    setIdError(""); setIdSaving(true);
+    const { error } = await supabaseClient.from("homeowner_verification").update({ id_provided: true }).eq("homeowner_id", user.id);
+    setIdSaving(false);
+    if (error) { setIdError(error.message); return; }
+    setIdProvided(true);
+  };
 
   const handleAddressBlur = async () => {
     const addr = exactAddress.trim();
@@ -1673,6 +1712,33 @@ function PostJobPage({ navigate, homeownerStatus, user }) {
             <button className="pl-btn pl-btn-amber" onClick={() => navigate("parents")}>Go to verification</button>
             <button className="pl-btn pl-btn-outline" onClick={() => navigate("pricing")}>See pricing first</button>
           </div>
+        </div>
+      </section>
+    );
+  }
+
+  if (idProvided === null) {
+    return <section className="pl-section"><div className="pl-wrap"><p style={{ color: "var(--ink-soft)" }}>Checking your account…</p></div></section>;
+  }
+
+  if (idProvided === false) {
+    return (
+      <section className="pl-section">
+        <div className="pl-wrap" style={{ maxWidth: 560 }}>
+          <div className="pl-eyebrow"><Beacon /> Post a job</div>
+          <h1 style={{ fontSize: "clamp(26px,3.4vw,36px)", marginBottom: 12 }}>One more thing before your first listing.</h1>
+          <p className="pl-lede" style={{ marginBottom: 24 }}>
+            We ask for a government-issued ID once, before your very first job goes live — never again after that.
+          </p>
+          <form onSubmit={submitId} className="pl-form-card">
+            <div className="pl-field">
+              <label htmlFor="post-job-id">Government-issued ID</label>
+              <input className="pl-input" id="post-job-id" type="file" accept="image/*,.pdf" onChange={(e) => setIdFile(e.target.files?.[0] || null)} />
+              <span className="hint">Driver's license, state ID, or passport. This is a one-time check — you won't be asked again for future listings.</span>
+            </div>
+            {idError && <div className="pl-age-note"><IconAlert /><span>{idError}</span></div>}
+            <button type="submit" className="pl-btn pl-btn-amber" disabled={idSaving}>{idSaving ? "Confirming…" : "Continue to post your job"}</button>
+          </form>
         </div>
       </section>
     );
@@ -1987,10 +2053,25 @@ function JobMap({ jobs, onViewJob }) {
   const [mapMissing, setMapMissing] = useState(false);
 
   useEffect(() => {
-    if (!window.mapboxgl) { setMapMissing(true); return; }
-    if (!mapContainer.current || mapRef.current) return;
+    if (mapContainer.current === null) return;
+    if (mapRef.current) return;
 
-    const map = new window.mapboxgl.Map({
+    let cancelled = false;
+    let attempts = 0;
+
+    const tryInit = () => {
+      if (cancelled) return;
+      if (!window.mapboxgl) {
+        attempts += 1;
+        if (attempts > 40) { setMapMissing(true); return; } // ~10s of retrying before giving up
+        setTimeout(tryInit, 250);
+        return;
+      }
+      if (!mapContainer.current || mapRef.current) return;
+      initMap();
+    };
+
+    function initMap() {    const map = new window.mapboxgl.Map({
       container: mapContainer.current,
       style: "mapbox://styles/mapbox/light-v11",
       center: [-73.26, 41.14], // rough Fairfield County, CT default view
@@ -2077,8 +2158,10 @@ function JobMap({ jobs, onViewJob }) {
 
       setMapReady(true);
     });
+    } // end initMap
 
-    return () => { map.remove(); mapRef.current = null; };
+    tryInit();
+    return () => { cancelled = true; if (mapRef.current) { mapRef.current.remove(); mapRef.current = null; } };
   }, []);
 
   useEffect(() => {
@@ -2127,6 +2210,11 @@ function BrowseJobsPage({ navigate, user }) {
   const [applied, setApplied] = useState(null);
   const [applyError, setApplyError] = useState("");
   const [hasConsent, setHasConsent] = useState(null); // null = unknown/loading, true/false once checked
+  const [searchInput, setSearchInput] = useState("");
+  const [searchCenter, setSearchCenter] = useState(null); // { lat, lng, label }
+  const [radiusMiles, setRadiusMiles] = useState(15);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchError, setSearchError] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -2157,7 +2245,42 @@ function BrowseJobsPage({ navigate, user }) {
     return () => { active = false; };
   }, [user]);
 
-  const list = filter === "All" ? jobs : jobs.filter((j) => j.category === filter);
+  const searchByLocation = async (e) => {
+    e.preventDefault();
+    if (!searchInput.trim()) { setSearchError("Enter a town or address to search near."); return; }
+    setSearchError(""); setSearchLoading(true);
+    try {
+      const result = await geocodeAddress(searchInput.trim());
+      setSearchCenter({ lat: result.lat, lng: result.lng, label: searchInput.trim() });
+    } catch (err) {
+      setSearchError(err.message);
+    }
+    setSearchLoading(false);
+  };
+
+  const useMyLocation = () => {
+    if (!navigator.geolocation) { setSearchError("Your browser doesn't support location — try searching a town instead."); return; }
+    setSearchError(""); setSearchLoading(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setSearchCenter({ lat: pos.coords.latitude, lng: pos.coords.longitude, label: "your current location" });
+        setSearchInput("");
+        setSearchLoading(false);
+      },
+      () => { setSearchError("Couldn't get your location — check your browser's location permission, or search a town instead."); setSearchLoading(false); },
+      { timeout: 10000 }
+    );
+  };
+
+  const clearSearch = () => { setSearchCenter(null); setSearchInput(""); setSearchError(""); };
+
+  const jobsWithDistance = jobs.map((j) => ({
+    ...j,
+    distance: searchCenter && j.public_lat && j.public_lng ? milesBetween(searchCenter.lat, searchCenter.lng, j.public_lat, j.public_lng) : null,
+  }));
+  const list = (filter === "All" ? jobsWithDistance : jobsWithDistance.filter((j) => j.category === filter))
+    .filter((j) => !searchCenter || j.distance === null || j.distance <= radiusMiles)
+    .sort((a, b) => (searchCenter ? (a.distance ?? 999) - (b.distance ?? 999) : 0));
 
   const applyToJob = async (job) => {
     setApplyError("");
@@ -2185,6 +2308,31 @@ function BrowseJobsPage({ navigate, user }) {
         <div className="pl-eyebrow"><Beacon /> Browse jobs</div>
         <h1 style={{ fontSize: "clamp(28px,3.6vw,40px)", marginBottom: 12 }}>Local jobs, ready to apply for.</h1>
         <p className="pl-lede" style={{ marginBottom: 20 }}>Every listing below has already passed Porchlight's category and safety review.</p>
+
+        <form onSubmit={searchByLocation} style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end", marginBottom: 16 }}>
+          <div className="pl-field" style={{ flex: "1 1 220px", marginBottom: 0 }}>
+            <label htmlFor="job-search-loc">Search near a town or address</label>
+            <input className="pl-input" id="job-search-loc" value={searchInput} onChange={(e) => setSearchInput(e.target.value)} placeholder="e.g. Fairfield, CT" />
+          </div>
+          <div className="pl-field" style={{ flex: "0 0 auto", marginBottom: 0 }}>
+            <label htmlFor="job-search-radius">Within</label>
+            <select className="pl-select" id="job-search-radius" value={radiusMiles} onChange={(e) => setRadiusMiles(Number(e.target.value))}>
+              <option value={5}>5 miles</option>
+              <option value={15}>15 miles</option>
+              <option value={25}>25 miles</option>
+              <option value={50}>50 miles</option>
+            </select>
+          </div>
+          <button type="submit" className="pl-btn pl-btn-amber" disabled={searchLoading} style={{ height: 46 }}>{searchLoading ? "Searching…" : "Search"}</button>
+          <button type="button" className="pl-btn pl-btn-outline" onClick={useMyLocation} disabled={searchLoading} style={{ height: 46 }}>Use my location</button>
+          {searchCenter && <button type="button" className="pl-btn pl-btn-outline" onClick={clearSearch} style={{ height: 46 }}>Clear</button>}
+        </form>
+        {searchError && <div className="pl-age-note" style={{ marginBottom: 16 }}><IconAlert /><span>{searchError}</span></div>}
+        {searchCenter && (
+          <p style={{ color: "var(--ink-soft)", fontSize: 13.5, marginBottom: 16 }}>
+            Showing jobs within {radiusMiles} miles of {searchCenter.label}. Distance is approximate, since exact addresses stay private until a job is accepted.
+          </p>
+        )}
 
         <JobMap jobs={list} onViewJob={scrollToJob} />
 
@@ -2230,7 +2378,7 @@ function BrowseJobsPage({ navigate, user }) {
                 <span><IconClock />{j.start_time?.slice(0, 5)}–{j.end_time?.slice(0, 5)}</span>
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-                <span style={{ fontSize: 13, color: "var(--ink-soft)" }}>{j.job_date}</span>
+                <span style={{ fontSize: 13, color: "var(--ink-soft)" }}>{j.job_date}{searchCenter && j.distance !== null ? ` · ${j.distance.toFixed(1)} mi away` : ""}</span>
                 <button
                   className="pl-btn pl-btn-amber pl-btn-sm"
                   disabled={appliedIds.includes(j.id) || user?.role === "homeowner" || (user?.role === "teen" && hasConsent === false)}
@@ -2869,6 +3017,26 @@ function MessagesPage({ navigate, user, jobId, openChat, onRead }) {
 
 function ProfilePage({ navigate, user, setUser, openChat, openTeenProfile }) {
   const [nameInput, setNameInput] = useState(user?.name || "");
+  const [bioInput, setBioInput] = useState("");
+  const [avatarUrl, setAvatarUrl] = useState(null);
+  const [avatarUploading, setAvatarUploading] = useState(false);
+  const [avatarError, setAvatarError] = useState("");
+
+  const uploadAvatar = async (file) => {
+    if (!file || !supabaseClient || !user) return;
+    setAvatarError(""); setAvatarUploading(true);
+    const ext = (file.name.split(".").pop() || "jpg").toLowerCase();
+    const path = `${user.id}/avatar.${ext}`;
+    const { error: uploadErr } = await supabaseClient.storage.from("avatars").upload(path, file, { upsert: true, cacheControl: "3600" });
+    if (uploadErr) { setAvatarUploading(false); setAvatarError(uploadErr.message); return; }
+    const { data: urlData } = supabaseClient.storage.from("avatars").getPublicUrl(path);
+    const publicUrl = urlData.publicUrl + "?t=" + Date.now();
+    const { error: updateErr } = await supabaseClient.from("profiles").update({ avatar_url: publicUrl }).eq("id", user.id);
+    setAvatarUploading(false);
+    if (updateErr) { setAvatarError(updateErr.message); return; }
+    setAvatarUrl(publicUrl);
+  };
+
   const [savingName, setSavingName] = useState(false);
   const [nameSaved, setNameSaved] = useState(false);
   const [nameError, setNameError] = useState("");
@@ -2927,6 +3095,9 @@ function ProfilePage({ navigate, user, setUser, openChat, openTeenProfile }) {
             rating: ratingByJob[j.id] || null,
           })));
         }
+
+        const { data: myHomeownerProfile } = await supabaseClient.from("profiles").select("avatar_url").eq("id", user.id).single();
+        if (active) setAvatarUrl(myHomeownerProfile?.avatar_url || null);
       } else if (user.role === "teen") {
         const { data } = await supabaseClient
           .from("job_applications")
@@ -2940,6 +3111,9 @@ function ProfilePage({ navigate, user, setUser, openChat, openTeenProfile }) {
           setTotalRatings(all.length);
           setFiveStarCount(all.filter((r) => r.stars === 5).length);
         }
+
+        const { data: myProfile } = await supabaseClient.from("profiles").select("bio, avatar_url").eq("id", user.id).single();
+        if (active) { setBioInput(myProfile?.bio || ""); setAvatarUrl(myProfile?.avatar_url || null); }
       }
       if (active) setLoading(false);
     }
@@ -3011,7 +3185,7 @@ function ProfilePage({ navigate, user, setUser, openChat, openTeenProfile }) {
     if (job.status === "open" && !applicantsByJob[job.id]) {
       const { data, error } = await supabaseClient
         .from("job_applications")
-        .select("id, teen_id, status, profiles(full_name)")
+        .select("id, teen_id, status, profiles(full_name, avatar_url)")
         .eq("job_id", job.id)
         .eq("status", "pending");
       if (error) { setJobActionError(error.message); return; }
@@ -3085,7 +3259,9 @@ function ProfilePage({ navigate, user, setUser, openChat, openTeenProfile }) {
     e.preventDefault();
     if (!nameInput.trim()) { setNameError("Name can't be empty."); return; }
     setNameError(""); setSavingName(true);
-    const { error } = await supabaseClient.from("profiles").update({ full_name: nameInput.trim() }).eq("id", user.id);
+    const updates = { full_name: nameInput.trim() };
+    if (user.role === "teen") updates.bio = bioInput.trim();
+    const { error } = await supabaseClient.from("profiles").update(updates).eq("id", user.id);
     setSavingName(false);
     if (error) { setNameError(error.message); return; }
     setUser((prev) => ({ ...prev, name: nameInput.trim() }));
@@ -3134,11 +3310,34 @@ function ProfilePage({ navigate, user, setUser, openChat, openTeenProfile }) {
 
         <div className="pl-form-card" style={{ marginBottom: 24 }}>
           <h3 style={{ marginBottom: 14 }}>Settings</h3>
+          <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 18, flexWrap: "wrap" }}>
+            {avatarUrl ? (
+              <img src={avatarUrl} alt="Your profile" style={{ width: 64, height: 64, borderRadius: "50%", objectFit: "cover", border: "2px solid var(--line)" }} />
+            ) : (
+              <div style={{ width: 64, height: 64, borderRadius: "50%", background: "var(--card)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--ink-soft)", fontWeight: 800, fontSize: 22 }}>
+                {user.name?.[0]?.toUpperCase() || "?"}
+              </div>
+            )}
+            <div>
+              <label className="pl-btn pl-btn-outline pl-btn-sm" style={{ cursor: "pointer", display: "inline-flex" }}>
+                {avatarUploading ? "Uploading…" : "Upload photo"}
+                <input type="file" accept="image/*" style={{ display: "none" }} onChange={(e) => uploadAvatar(e.target.files?.[0])} disabled={avatarUploading} />
+              </label>
+              {avatarError && <p style={{ color: "#B4321F", fontSize: 13, margin: "6px 0 0" }}>{avatarError}</p>}
+            </div>
+          </div>
           <form onSubmit={saveName}>
             <div className="pl-field">
               <label htmlFor="profile-name">Full name</label>
               <input className="pl-input" id="profile-name" value={nameInput} onChange={(e) => setNameInput(e.target.value)} />
             </div>
+            {user.role === "teen" && (
+              <div className="pl-field">
+                <label htmlFor="profile-bio">Bio — let homeowners get to know you</label>
+                <textarea className="pl-textarea" id="profile-bio" value={bioInput} onChange={(e) => setBioInput(e.target.value.slice(0, 280))} placeholder="e.g. Sophomore at Fairfield High, I've mowed lawns for two summers and love working with dogs." />
+                <span className="hint">{280 - bioInput.length} characters left</span>
+              </div>
+            )}
             {nameError && <div className="pl-age-note"><IconAlert /><span>{nameError}</span></div>}
             {nameSaved && <div className="pl-confirm"><IconCheck /> Saved.</div>}
             <button type="submit" className="pl-btn pl-btn-outline pl-btn-sm" disabled={savingName}>{savingName ? "Saving…" : "Save changes"}</button>
@@ -3218,6 +3417,13 @@ function ProfilePage({ navigate, user, setUser, openChat, openTeenProfile }) {
                         applicantsByJob[j.id].map((a) => (
                           <div key={a.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, gap: 12, flexWrap: "wrap", paddingBottom: 12, borderBottom: "1px solid var(--line)" }}>
                             <button onClick={() => openTeenProfile(a.teen_id)} style={{ display: "flex", alignItems: "center", gap: 10, background: "none", border: "none", cursor: "pointer", textAlign: "left", padding: 0 }}>
+                              {a.profiles?.avatar_url ? (
+                                <img src={a.profiles.avatar_url} alt="" style={{ width: 36, height: 36, borderRadius: "50%", objectFit: "cover", flex: "none" }} />
+                              ) : (
+                                <div style={{ width: 36, height: 36, borderRadius: "50%", background: "var(--card)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--ink-soft)", fontWeight: 800, fontSize: 15, flex: "none" }}>
+                                  {a.profiles?.full_name?.[0]?.toUpperCase() || "?"}
+                                </div>
+                              )}
                               {a.tier ? <BadgeIcon tier={a.tier} size={32} /> : null}
                               <div>
                                 <div style={{ fontWeight: 700, textDecoration: "underline" }}>{a.profiles?.full_name || "Applicant"}</div>
