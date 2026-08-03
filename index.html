@@ -666,7 +666,7 @@ const ROUTE_PATHS = {
   parents: "/parents",
   teens: "/teens",
   consent: "/consent",
-  "post-job": "/post-job",
+  "post-job": "/post-a-job",
   "browse-jobs": "/browse-jobs",
   safety: "/safety",
   login: "/login",
@@ -2733,6 +2733,54 @@ function PostJobPage({
   const [idError, setIdError] = useState("");
   const [idSaving, setIdSaving] = useState(false);
   const [planConfirmed, setPlanConfirmed] = useState(false);
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [checkoutError, setCheckoutError] = useState("");
+  const [checkoutStatus, setCheckoutStatus] = useState(null);
+  useEffect(() => {
+    const qp = new URLSearchParams(window.location.search);
+    const checkoutParam = qp.get("checkout");
+    const sessionId = qp.get("session_id");
+    if (checkoutParam === "success" && sessionId && user && supabaseClient) {
+      setCheckoutStatus("verifying");
+      let cancelled = false;
+      let attempts = 0;
+      const poll = async () => {
+        if (cancelled) return;
+        attempts++;
+        const { data } = await supabaseClient.from("payments").select("id, status, plan").eq("stripe_checkout_session_id", sessionId).maybeSingle();
+        if (cancelled) return;
+        if (data && data.status === "completed") {
+          setPlan(data.plan);
+          setPlanConfirmed(true);
+          setCheckoutStatus("success");
+          window.history.replaceState({}, "", "/post-a-job");
+        } else if (attempts < 10) {
+          setTimeout(poll, 1500);
+        } else {
+          setCheckoutStatus("timeout");
+        }
+      };
+      poll();
+      return () => { cancelled = true; };
+    } else if (checkoutParam === "cancelled") {
+      setCheckoutStatus("cancelled");
+      window.history.replaceState({}, "", "/post-a-job");
+    }
+  }, [user]);
+  const startCheckout = async planKey => {
+    if (!supabaseClient || !user) return;
+    setCheckoutError("");
+    setCheckoutLoading(true);
+    try {
+      const { data, error } = await supabaseClient.functions.invoke("create-checkout-session", { body: { homeownerId: user.id, plan: planKey } });
+      if (error) throw error;
+      if (!data || !data.url) throw new Error("Could not start checkout — try again.");
+      window.location.href = data.url;
+    } catch (e) {
+      setCheckoutLoading(false);
+      setCheckoutError(e.message || "Something went wrong starting checkout.");
+    }
+  };
   useEffect(() => {
     let active = true;
     async function checkId() {
@@ -2982,13 +3030,30 @@ function PostJobPage({
       style: {
         marginBottom: 28
       }
-    }, /*#__PURE__*/React.createElement(PricingPicker, {
+    }, checkoutStatus === "verifying" && /*#__PURE__*/React.createElement("div", {
+        role: "status",
+        className: "pl-confirm",
+        style: { marginBottom: 20 }
+      }, "Confirming your payment with Stripe…"), checkoutStatus === "cancelled" && /*#__PURE__*/React.createElement("div", {
+        role: "alert",
+        className: "pl-age-note",
+        style: { marginBottom: 20 }
+      }, /*#__PURE__*/React.createElement(IconAlert, null), /*#__PURE__*/React.createElement("span", null, "Checkout was cancelled — pick a plan below to try again.")), checkoutStatus === "timeout" && /*#__PURE__*/React.createElement("div", {
+        role: "alert",
+        className: "pl-age-note",
+        style: { marginBottom: 20 }
+      }, /*#__PURE__*/React.createElement(IconAlert, null), /*#__PURE__*/React.createElement("span", null, "Payment is taking a moment to confirm — refresh in a bit, or contact support if this persists.")), checkoutError && /*#__PURE__*/React.createElement("div", {
+        role: "alert",
+        className: "pl-age-note",
+        style: { marginBottom: 20 }
+      }, /*#__PURE__*/React.createElement(IconAlert, null), /*#__PURE__*/React.createElement("span", null, checkoutError)), /*#__PURE__*/React.createElement(PricingPicker, {
       plan: plan,
       setPlan: setPlan
     })), /*#__PURE__*/React.createElement("button", {
       className: "pl-btn pl-btn-amber",
-      onClick: () => setPlanConfirmed(true)
-    }, "Continue with ", plan === "single" ? "$5.99 single listing" : plan === "monthly" ? "$11.99/month unlimited" : "$119.99/year unlimited")));
+      onClick: () => startCheckout(plan),
+      disabled: checkoutLoading
+    }, checkoutLoading ? "Redirecting to checkout…" : "Continue with ", checkoutLoading ? "" : plan === "single" ? "$5.99 single listing" : plan === "monthly" ? "$11.99/month unlimited" : "$119.99/year unlimited")));
   }
   if (idProvided === null) {
     return /*#__PURE__*/React.createElement("section", {
@@ -3209,7 +3274,7 @@ function PostJobPage({
     type: "submit",
     className: "pl-btn pl-btn-amber",
     disabled: saving
-  }, saving ? "Posting…" : plan === "single" ? "Submit & pay $5.99" : plan === "monthly" ? "Submit — included in $11.99/mo plan" : "Submit — included in $119.99/yr plan"), /*#__PURE__*/React.createElement("button", {
+  }, saving ? "Posting…" : "Post job listing"), /*#__PURE__*/React.createElement("button", {
     type: "button",
     className: "pl-btn pl-btn-outline",
     onClick: () => navigate("profile")
