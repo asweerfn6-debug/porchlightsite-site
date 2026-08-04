@@ -1410,7 +1410,7 @@ function AdminPage({
       const repeatPosters = postersArr.filter(c => c > 1).length;
       const repeatRate = uniquePosters ? Math.round(repeatPosters / uniquePosters * 100) : 0;
       const avgJobsPerPoster = uniquePosters ? jobsAll.length / uniquePosters : 0;
-      if (data && (data.status === "completed" || data.status === "paid")) {
+      const completed = jobsAll.filter(j => j.status === "completed").length;
       const computedMetrics = {
         totalUsers: profs.length,
         homeowners: homeowners.length,
