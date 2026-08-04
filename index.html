@@ -696,6 +696,10 @@ function buildUrl(key, opts) {
   const params = new URLSearchParams();
   const preview = new URLSearchParams(INITIAL_SEARCH).get("preview");
   if (preview) params.set("preview", preview);
+  const checkout = new URLSearchParams(INITIAL_SEARCH).get("checkout");
+  const sessionId = new URLSearchParams(INITIAL_SEARCH).get("session_id");
+  if (checkout) params.set("checkout", checkout);
+  if (sessionId) params.set("session_id", sessionId);
   if (key === "messages" && opts && opts.jobId) params.set("job", opts.jobId);
   if (key === "teen-profile" && opts && opts.teenId) params.set("teen", opts.teenId);
   const qs = params.toString();
